@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Agenda Adri</title>
+<link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<h1>Agenda Adri</h1>
+
+<section class="panel">
+
+  <h2>Crear paciente</h2>
+
+  <div class="form-box">
+    <input type="text" id="patientName" placeholder="Nombre del paciente">
+    <input type="text" id="patientPhone" placeholder="Teléfono">
+    <input type="email" id="patientEmail" placeholder="Email">
+    <input type="text" id="patientNotes" placeholder="Notas">
+    <button onclick="createPatient()">Guardar paciente</button>
+  </div>
+
+</section>
+
+<section class="panel">
+
+  <h2>Crear turno</h2>
+
+  <div class="form-box">
+<select id="appointmentPatient" onchange="showSelectedPatient()"></select>
+    <p id="selectedPatientInfo"></p>
+    <input type="date" id="appointmentDate">
+    <input type="time" id="appointmentTime">
+    <input type="text" id="appointmentNotes" placeholder="Notas del turno">
+    <button onclick="createAppointment()">Guardar turno</button>
+  </div>
+
+</section>
+
+<section class="panel">
+
+  <h2>Agenda del día</h2>
+
+  <div class="controls">
+    <input type="date" id="datePicker">
+    <button onclick="loadAppointments()">Ver agenda</button>
+  </div>
+
+  <div id="agenda"></div>
+
+</section>
+
+<section class="panel">
+
+  <h2>Próximos turnos</h2>
+
+  <div id="upcoming"></div>
+
+</section>
+
+<script src="app.js"></script>
+
+</body>
+</html>

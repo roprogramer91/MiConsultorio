@@ -16,8 +16,10 @@ datasource db {
 model Patient {
   id        Int      @id @default(autoincrement())
   name      String
+  dni       String?
   phone     String?
   email     String?
+  birthDate DateTime?
   notes     String?
   createdAt DateTime @default(now())
 

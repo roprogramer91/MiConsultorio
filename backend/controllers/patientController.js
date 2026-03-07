@@ -14,6 +14,8 @@ export const createPatient = async (req, res) => {
         phone,
         email,
         notes,
+        dni,
+        birthDate
       },
     });
 

@@ -2,7 +2,7 @@ import prisma from "../prismaClient.js";
 
 export const createPatient = async (req, res) => {
   try {
-    const { name, phone, email, notes } = req.body;
+    const { name, dni, phone, email, birthDate, notes } = req.body;
 
     if (!name) {
       return res.status(400).json({ error: "El nombre es obligatorio" });
@@ -11,11 +11,11 @@ export const createPatient = async (req, res) => {
     const newPatient = await prisma.patient.create({
       data: {
         name,
+        dni,
         phone,
         email,
+        birthDate: birthDate ? new Date(birthDate) : null,
         notes,
-        dni,
-        birthDate
       },
     });
 

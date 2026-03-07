@@ -73,6 +73,28 @@ export const getAppointmentsByDate = async (req, res) => {
   }
 };
 
+//OBTENER TURNOS POR PACIENTE
+export const getAppointmentsByPatient = async (req, res) => {
+  try {
+    const { patientId } = req.params;
+
+    const appointments = await prisma.appointment.findMany({
+      where: {
+        patientId: Number(patientId),
+      },
+      orderBy: [
+        { date: "desc" },
+        { time: "desc" }
+      ],
+    });
+
+    res.json(appointments);
+  } catch (error) {
+    console.error("Error obteniendo historial del paciente:", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+};
+
 //ACTUALIZAR ESTADO DEL TURNO   
 export const updateAppointmentStatus = async (req, res) => {
   try {

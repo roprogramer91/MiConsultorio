@@ -46,3 +46,28 @@ export const getPatients = async (req, res) => {
   }
 };
 
+export const getPatientById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const patient = await prisma.patient.findUnique({
+      where: {
+        id: Number(id),
+      },
+    });
+
+    if (!patient) {
+      return res.status(404).json({
+        error: "Paciente no encontrado",
+      });
+    }
+
+    res.json(patient);
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      error: "Error obteniendo paciente",
+    });
+  }
+};

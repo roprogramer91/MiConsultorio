@@ -1,0 +1,1 @@
+export const API_URL = "https://miconsultorio-production.up.railway.app";

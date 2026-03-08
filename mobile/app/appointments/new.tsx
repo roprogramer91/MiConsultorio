@@ -24,7 +24,9 @@ export default function NewAppointmentScreen() {
   const { patientId } = useLocalSearchParams();
 
   const [patient, setPatient] = useState<PatientType | null>(null);
+  const [patients, setPatients] = useState<PatientType[]>([]);
   const [loadingPatient, setLoadingPatient] = useState(false);
+  const [showPatientSelector, setShowPatientSelector] = useState(false);
 
   const [appointmentDate, setAppointmentDate] = useState<any>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -64,6 +66,28 @@ export default function NewAppointmentScreen() {
   const [notes, setNotes] = useState("");
 
   useEffect(() => {
+    async function loadPatients() {
+      if (patientId) return;
+
+      try {
+        setLoadingPatient(true);
+
+        const response = await fetch(`${API_URL}/patients`);
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error("No se pudieron cargar los pacientes");
+        }
+
+        setPatients(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.log("Error cargando pacientes para turno:", error);
+        Alert.alert("Error", "No se pudo cargar la lista de pacientes");
+      } finally {
+        setLoadingPatient(false);
+      }
+    }
+
     async function loadPatient() {
       if (!patientId) return;
 
@@ -86,6 +110,7 @@ export default function NewAppointmentScreen() {
       }
     }
 
+    loadPatients();
     loadPatient();
   }, [patientId]);
 
@@ -101,62 +126,64 @@ export default function NewAppointmentScreen() {
   }
 
   async function handleSaveAppointment() {
-  try {
-    if (!patient?.id) {
-      Alert.alert("Error", "Debes seleccionar un paciente");
-      return;
+    try {
+      if (!patient?.id) {
+        Alert.alert("Error", "Debes seleccionar un paciente");
+        return;
+      }
+
+      if (!appointmentDate) {
+        Alert.alert("Error", "Debes seleccionar una fecha");
+        return;
+      }
+
+      if (!time) {
+        Alert.alert("Error", "Debes seleccionar una hora");
+        return;
+      }
+
+      if (!reason.trim()) {
+        Alert.alert("Error", "Debes ingresar el motivo de consulta");
+        return;
+      }
+
+      const formattedDate = appointmentDate.toISOString().split("T")[0];
+
+      const response = await fetch(`${API_URL}/appointments`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          patientId: patient.id,
+          date: formattedDate,
+          time,
+          status: "pendiente",
+          notes: `${reason}${notes ? " - " + notes : ""}`,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        Alert.alert("Error", data.error || "No se pudo crear el turno");
+        return;
+      }
+
+      Alert.alert("Turno creado", "El turno se guardó correctamente", [
+        {
+          text: "OK",
+          onPress: () =>
+            patientId
+              ? router.replace(`/patients/${patient.id}` as any)
+              : router.replace("/appointments" as any),
+        },
+      ]);
+    } catch (error) {
+      console.log("Error creando turno:", error);
+      Alert.alert("Error", "No se pudo conectar con el servidor");
     }
-
-    if (!appointmentDate) {
-      Alert.alert("Error", "Debes seleccionar una fecha");
-      return;
-    }
-
-    if (!time) {
-      Alert.alert("Error", "Debes seleccionar una hora");
-      return;
-    }
-
-    if (!reason.trim()) {
-      Alert.alert("Error", "Debes ingresar el motivo de consulta");
-      return;
-    }
-
-    const formattedDate = appointmentDate.toISOString().split("T")[0];
-
-    const response = await fetch(`${API_URL}/appointments`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        patientId: patient.id,
-        date: formattedDate,
-        time,
-        status: "pendiente",
-        notes: `${reason}${notes ? " - " + notes : ""}`,
-      }),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      Alert.alert("Error", data.error || "No se pudo crear el turno");
-      return;
-    }
-
-    Alert.alert("Turno creado", "El turno se guardó correctamente", [
-  {
-    text: "OK",
-    onPress: () => router.replace(`/patients/${patient.id}` as any),
-  },
-]);
-
-  } catch (error) {
-    console.log("Error creando turno:", error);
-    Alert.alert("Error", "No se pudo conectar con el servidor");
   }
-}
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -175,11 +202,14 @@ export default function NewAppointmentScreen() {
           Paciente <Text style={styles.required}>*</Text>
         </Text>
 
-        <View
+        <TouchableOpacity
           style={[
             styles.patientBox,
             patientId ? styles.patientBoxLocked : null,
           ]}
+          activeOpacity={patientId ? 1 : 0.8}
+          disabled={!!patientId || loadingPatient}
+          onPress={() => setShowPatientSelector((prev) => !prev)}
         >
           {loadingPatient ? (
             <Text style={styles.loadingText}>Cargando paciente...</Text>
@@ -197,15 +227,37 @@ export default function NewAppointmentScreen() {
               {patientId ? (
                 <Ionicons name="lock-closed-outline" size={24} color="#bdbdbd" />
               ) : (
-                <Ionicons name="chevron-forward" size={28} color="#bdbdbd" />
+                <Ionicons
+                  name={showPatientSelector ? "chevron-up" : "chevron-down"}
+                  size={28}
+                  color="#bdbdbd"
+                />
               )}
             </>
           ) : (
-            <Text style={styles.placeholderText}>
-              Acá después vamos a mostrar el selector de pacientes
-            </Text>
+            <Text style={styles.placeholderText}>Seleccionar paciente</Text>
           )}
-        </View>
+        </TouchableOpacity>
+
+        {!patientId && showPatientSelector && (
+          <View style={styles.patientDropdown}>
+            <ScrollView nestedScrollEnabled style={styles.patientDropdownScroll}>
+              {patients.map((item) => (
+                <TouchableOpacity
+                  key={item.id}
+                  style={styles.patientOption}
+                  onPress={() => {
+                    setPatient(item);
+                    setShowPatientSelector(false);
+                  }}
+                >
+                  <Text style={styles.patientOptionName}>{item.name}</Text>
+                  <Text style={styles.patientOptionMeta}>DNI: {item.dni || "-"}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
       </View>
 
       <View style={styles.row}>
@@ -395,6 +447,33 @@ const styles = StyleSheet.create({
   placeholderText: {
     fontSize: 16,
     color: MUTED,
+  },
+  patientDropdown: {
+    marginTop: 8,
+    backgroundColor: "#fff",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#ddd",
+    overflow: "hidden",
+  },
+  patientDropdownScroll: {
+    maxHeight: 240,
+  },
+  patientOption: {
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
+  },
+  patientOptionName: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: TEXT,
+    marginBottom: 4,
+  },
+  patientOptionMeta: {
+    fontSize: 14,
+    color: "#777",
   },
   avatar: {
     width: 58,

@@ -1,11 +1,19 @@
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView } from "react-native";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useFocusEffect } from "expo-router";
 import { API_URL } from "../../constants/api";
 import { router } from "expo-router";
 
+type Patient = {
+  id: number;
+  name: string;
+  dni?: string;
+  phone?: string;
+};
+
 export default function PatientsScreen() {
-  const [patients, setPatients] = useState([]);
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [search, setSearch] = useState("");
 
   useFocusEffect(
     useCallback(() => {
@@ -13,7 +21,7 @@ export default function PatientsScreen() {
         try {
           const response = await fetch(`${API_URL}/patients`);
           const data = await response.json();
-          setPatients(data);
+          setPatients(Array.isArray(data) ? data : []);
         } catch (error) {
           console.log("Error cargando pacientes", error);
         }
@@ -22,6 +30,21 @@ export default function PatientsScreen() {
       loadPatients();
     }, [])
   );
+
+  const filteredPatients = useMemo(() => {
+    const query = search.trim().toLowerCase();
+
+    if (!query) {
+      return patients;
+    }
+
+    return patients.filter((patient) => {
+      const name = patient.name?.toLowerCase() || "";
+      const dni = patient.dni?.toLowerCase() || "";
+
+      return name.includes(query) || dni.includes(query);
+    });
+  }, [patients, search]);
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -34,18 +57,27 @@ export default function PatientsScreen() {
           placeholder="Buscar paciente por nombre o DNI"
           placeholderTextColor="#999"
           style={styles.searchInput}
+          value={search}
+          onChangeText={setSearch}
         />
 
-        {patients.map((patient: any) => (
-          <TouchableOpacity
-            key={patient.id}
-            style={styles.card}
-            onPress={() => router.push(`/patients/${patient.id}` as any)}
-          >
-            <Text style={styles.cardTitle}>{patient.name}</Text>
-            <Text style={styles.cardSubtitle}>Teléfono: {patient.phone || "-"}</Text>
-          </TouchableOpacity>
-        ))}
+        {filteredPatients.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyText}>No se encontraron pacientes</Text>
+          </View>
+        ) : (
+          filteredPatients.map((patient) => (
+            <TouchableOpacity
+              key={patient.id}
+              style={styles.card}
+              onPress={() => router.push(`/patients/${patient.id}` as any)}
+            >
+              <Text style={styles.cardTitle}>{patient.name}</Text>
+              <Text style={styles.cardSubtitle}>DNI: {patient.dni || "-"}</Text>
+              <Text style={styles.cardSubtitle}>Teléfono: {patient.phone || "-"}</Text>
+            </TouchableOpacity>
+          ))
+        )}
       </View>
     </ScrollView>
   );
@@ -77,6 +109,15 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     fontSize: 16,
     marginBottom: 18,
+  },
+  emptyCard: {
+    backgroundColor: "white",
+    borderRadius: 20,
+    padding: 18,
+  },
+  emptyText: {
+    fontSize: 15,
+    color: "#666",
   },
   card: {
     backgroundColor: "white",

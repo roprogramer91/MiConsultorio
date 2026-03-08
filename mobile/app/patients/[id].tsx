@@ -118,8 +118,7 @@ export default function PatientDetailScreen() {
     email: patient.email || "-",
     birthDate: formatDate(patient.birthDate),
     notes: patient.notes || "Sin observaciones",
-    historyCount: "0 visitas",
-    history: [] as { id: number; title: string; status: string }[],
+    historyCount: `${appointments.length} ${appointments.length === 1 ? "visita" : "visitas"}`,
   };
 
   return (
@@ -159,7 +158,7 @@ export default function PatientDetailScreen() {
             <Text style={styles.actionButtonText}>Nuevo Turno</Text>
             </TouchableOpacity>
 
-          <TouchableOpacity style={styles.actionButton}>
+          <TouchableOpacity style={[styles.actionButton, styles.actionButtonDisabled]} disabled>
             <Ionicons name="pencil-outline" size={20} color="#fff" />
             <Text style={styles.actionButtonText}>Editar datos</Text>
           </TouchableOpacity>
@@ -339,6 +338,9 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
     fontWeight: "700",
+  },
+  actionButtonDisabled: {
+    opacity: 0.55,
   },
   sheet: {
     backgroundColor: BG,

@@ -127,7 +127,14 @@ export const updateAppointmentStatus = async (req, res) => {
 //OBTENER TODOS LOS TURNOS 
 export const getUpcomingAppointments = async (req, res) => {
   try {
+    const today = new Date().toISOString().split("T")[0];
+
     const appointments = await prisma.appointment.findMany({
+      where: {
+        date: {
+          gte: today,
+        },
+      },
       include: {
         patient: true,
       },

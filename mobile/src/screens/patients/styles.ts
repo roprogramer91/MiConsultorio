@@ -1,0 +1,146 @@
+import { StyleSheet } from "react-native";
+
+import { COLORS } from "../../../constants/colors";
+import { PATTERNS } from "../../styles/patterns";
+
+export const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  header: {
+    backgroundColor: COLORS.primary,
+    paddingTop: 10,
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+  },
+  searchBox: {
+    marginTop: 10,
+    backgroundColor: COLORS.white,
+    borderRadius: 18,
+    minHeight: 60,
+    paddingHorizontal: 18,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: "#222",
+  },
+  listScreen: {
+    backgroundColor: COLORS.background,
+  },
+  container: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 120,
+  },
+  counterText: {
+    color: COLORS.textMuted,
+    fontSize: 15,
+    fontWeight: "800",
+    letterSpacing: 1,
+    marginBottom: 14,
+  },
+  emptyCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 22,
+    padding: 20,
+    ...PATTERNS.surfaces.cardSection,
+    marginHorizontal: 0,
+  },
+  emptyText: {
+    fontSize: 15,
+    color: "#666",
+  },
+  card: {
+    backgroundColor: COLORS.white,
+    borderRadius: 22,
+    minHeight: 104,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginBottom: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    ...PATTERNS.surfaces.cardSection,
+    marginHorizontal: 0,
+  },
+  avatar: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: COLORS.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  avatarText: {
+    color: "#fff",
+    fontSize: 17,
+    fontWeight: "800",
+  },
+  infoBlock: {
+    flex: 1,
+    paddingRight: 10,
+  },
+  cardTitle: {
+    color: "#111",
+    fontSize: 16,
+    fontWeight: "800",
+    marginBottom: 3,
+  },
+  cardMeta: {
+    color: "#7e7e7e",
+    fontSize: 13,
+    marginBottom: 3,
+  },
+  phoneRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  phoneText: {
+    color: "#7e7e7e",
+    fontSize: 13,
+    marginLeft: 6,
+  },
+  actionsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    width: 86,
+  },
+  editButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: "#f3f0ec",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  deleteButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: "#fdeeee",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  fab: {
+    position: "absolute",
+    right: 22,
+    bottom: 22,
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: COLORS.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: COLORS.primaryDark,
+    shadowOpacity: 0.25,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 8,
+  },
+});

@@ -1,8 +1,12 @@
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView } from "react-native";
+import { Alert, View, Text, TextInput, TouchableOpacity, ScrollView } from "react-native";
 import { useCallback, useMemo, useState } from "react";
 import { useFocusEffect } from "expo-router";
-import { API_URL } from "../../constants/api";
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+
+import { API_URL } from "../../constants/api";
+import { ScreenHeader } from "../../components/screen-header";
+import { styles } from "../../src/screens/patients/styles";
 
 type Patient = {
   id: number;
@@ -14,6 +18,41 @@ type Patient = {
 export default function PatientsScreen() {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [search, setSearch] = useState("");
+
+  async function removePatient(patientId: number) {
+    try {
+      const response = await fetch(`${API_URL}/patients/${patientId}`, {
+        method: "DELETE",
+      });
+      const raw = await response.text();
+      const data = raw ? JSON.parse(raw) : {};
+
+      if (!response.ok) {
+        Alert.alert("Error", data.error || "No se pudo eliminar el paciente");
+        return;
+      }
+
+      setPatients((current) => current.filter((patient) => patient.id !== patientId));
+      Alert.alert("Paciente eliminado", "El paciente y sus turnos asociados se eliminaron correctamente");
+    } catch (error) {
+      Alert.alert("Error", "No se pudo eliminar el paciente. Revisa el backend y vuelve a intentar.");
+    }
+  }
+
+  function handleDeletePatient(patient: Patient) {
+    Alert.alert(
+      "Eliminar paciente",
+      `Se eliminara ${patient.name} y todos sus turnos asociados. Esta accion no se puede deshacer.`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Eliminar",
+          style: "destructive",
+          onPress: () => removePatient(patient.id),
+        },
+      ]
+    );
+  }
 
   useFocusEffect(
     useCallback(() => {
@@ -46,20 +85,38 @@ export default function PatientsScreen() {
     });
   }, [patients, search]);
 
+  function getInitials(name?: string) {
+    if (!name) return "?";
+
+    return name
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join("");
+  }
+
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <View style={styles.screen}>
       <View style={styles.header}>
-        <Text style={styles.title}>Pacientes</Text>
+        <ScreenHeader title="Pacientes" />
+
+        <View style={styles.searchBox}>
+          <Ionicons name="search-outline" size={28} color="#8f8f8f" />
+          <TextInput
+            placeholder="Buscar por nombre o DNI..."
+            placeholderTextColor="#9a9a9a"
+            style={styles.searchInput}
+            value={search}
+            onChangeText={setSearch}
+          />
+        </View>
       </View>
 
-      <View style={styles.content}>
-        <TextInput
-          placeholder="Buscar paciente por nombre o DNI"
-          placeholderTextColor="#999"
-          style={styles.searchInput}
-          value={search}
-          onChangeText={setSearch}
-        />
+      <ScrollView style={styles.listScreen} contentContainerStyle={styles.container}>
+        <Text style={styles.counterText}>
+          {filteredPatients.length} PACIENTES ENCONTRADOS
+        </Text>
 
         {filteredPatients.length === 0 ? (
           <View style={styles.emptyCard}>
@@ -70,74 +127,52 @@ export default function PatientsScreen() {
             <TouchableOpacity
               key={patient.id}
               style={styles.card}
+              activeOpacity={0.9}
               onPress={() => router.push(`/patients/${patient.id}` as any)}
             >
-              <Text style={styles.cardTitle}>{patient.name}</Text>
-              <Text style={styles.cardSubtitle}>DNI: {patient.dni || "-"}</Text>
-              <Text style={styles.cardSubtitle}>Teléfono: {patient.phone || "-"}</Text>
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>{getInitials(patient.name)}</Text>
+              </View>
+
+              <View style={styles.infoBlock}>
+                <Text style={styles.cardTitle}>{patient.name}</Text>
+                <Text style={styles.cardMeta}>DNI: {patient.dni || "-"}</Text>
+
+                <View style={styles.phoneRow}>
+                  <Ionicons name="call" size={18} color="#5f5f5f" />
+                  <Text style={styles.phoneText}>{patient.phone || "-"}</Text>
+                </View>
+              </View>
+
+              <View style={styles.actionsRow}>
+                <TouchableOpacity
+                  style={styles.editButton}
+                  activeOpacity={0.8}
+                  onPress={() => router.push(`/patients/edit/${patient.id}` as any)}
+                >
+                  <Ionicons name="pencil" size={24} color="#5a5a5a" />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.deleteButton}
+                  activeOpacity={0.8}
+                  onPress={() => handleDeletePatient(patient)}
+                >
+                  <Ionicons name="trash-outline" size={24} color="#d83030" />
+                </TouchableOpacity>
+              </View>
             </TouchableOpacity>
           ))
         )}
-      </View>
-    </ScrollView>
+      </ScrollView>
+
+      <TouchableOpacity
+        style={styles.fab}
+        activeOpacity={0.9}
+        onPress={() => router.push("/patients/new" as any)}
+      >
+        <Ionicons name="add" size={34} color="#fff" />
+      </TouchableOpacity>
+    </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    backgroundColor: "#efefef",
-    minHeight: "100%",
-  },
-  header: {
-    backgroundColor: "#c8102e",
-    paddingTop: 70,
-    paddingHorizontal: 24,
-    paddingBottom: 28,
-  },
-  title: {
-    color: "white",
-    fontSize: 30,
-    fontWeight: "800",
-  },
-  content: {
-    padding: 20,
-  },
-  searchInput: {
-    backgroundColor: "white",
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    marginBottom: 18,
-  },
-  emptyCard: {
-    backgroundColor: "white",
-    borderRadius: 20,
-    padding: 18,
-  },
-  emptyText: {
-    fontSize: 15,
-    color: "#666",
-  },
-  card: {
-    backgroundColor: "white",
-    borderRadius: 20,
-    padding: 18,
-    marginBottom: 14,
-    shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 4,
-  },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#111",
-    marginBottom: 4,
-  },
-  cardSubtitle: {
-    fontSize: 14,
-    color: "#777",
-  },
-});

@@ -5,6 +5,8 @@ import {
   updateAppointmentStatus,
   getUpcomingAppointments,
   getAppointmentsByPatient,
+  getAppointmentById,
+  updateAppointment,
 } from "../controllers/appointmentController.js";
 
 const router = express.Router();
@@ -15,7 +17,11 @@ router.get("/appointments/patient/:patientId", getAppointmentsByPatient);
 
 router.get("/appointments/upcoming", getUpcomingAppointments);
 
+router.get("/appointments/:id", getAppointmentById);
+
 router.get("/appointments", getAppointmentsByDate);
+
+router.put("/appointments/:id", updateAppointment);
 
 router.patch("/appointments/:id/status", updateAppointmentStatus);
 

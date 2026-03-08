@@ -1,8 +1,11 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
-import { API_URL } from "../../constants/api";
+
+import { API_URL } from "../../../constants/api";
+import { ScreenHeader } from "../../../components/screen-header";
+import { PRIMARY, styles } from "../../../src/screens/patient-detail/styles";
 
 type PatientType = {
   id: number;
@@ -40,14 +43,14 @@ export default function PatientDetailScreen() {
     }
 
     async function loadAppointments() {
-  try {
-    const response = await fetch(`${API_URL}/appointments/patient/${id}`);
-    const data = await response.json();
-    setAppointments(data);
-  } catch (error) {
-    console.log("Error cargando historial:", error);
-  }
-}
+      try {
+        const response = await fetch(`${API_URL}/appointments/patient/${id}`);
+        const data = await response.json();
+        setAppointments(data);
+      } catch (error) {
+        console.log("Error cargando historial:", error);
+      }
+    }
 
     if (id) {
       loadPatient();
@@ -93,6 +96,62 @@ export default function PatientDetailScreen() {
     return parsed.toLocaleDateString("es-AR");
   }
 
+  function formatHistoryDate(date?: string) {
+    if (!date) return "-";
+
+    const parsed = new Date(`${date}T00:00:00`);
+    if (isNaN(parsed.getTime())) return date;
+
+    return parsed.toLocaleDateString("es-AR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  }
+
+  function formatStatus(status?: string) {
+    if (!status) return "Programado";
+
+    const normalized = status.toLowerCase();
+
+    if (normalized === "atendido") return "Atendido";
+    if (normalized === "ausente") return "Ausente";
+    if (normalized === "cancelado") return "Cancelado";
+    if (normalized === "pendiente") return "Programado";
+
+    return "Programado";
+  }
+
+  function getHistoryStatusStyle(status?: string) {
+    const normalized = status?.toLowerCase();
+
+    if (normalized === "atendido") {
+      return {
+        badge: styles.statusBadge,
+        text: styles.statusText,
+      };
+    }
+
+    if (normalized === "ausente") {
+      return {
+        badge: [styles.statusBadge, styles.statusBadgeDanger],
+        text: [styles.statusText, styles.statusTextDanger],
+      };
+    }
+
+    if (normalized === "cancelado") {
+      return {
+        badge: [styles.statusBadge, styles.statusBadgeMuted],
+        text: [styles.statusText, styles.statusTextMuted],
+      };
+    }
+
+    return {
+      badge: [styles.statusBadge, styles.statusBadgeWarning],
+      text: [styles.statusText, styles.statusTextWarning],
+    };
+  }
+
   if (loading) {
     return (
       <View style={styles.centered}>
@@ -125,11 +184,10 @@ export default function PatientDetailScreen() {
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.hero}>
         <View style={styles.topBar}>
-          <TouchableOpacity onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={30} color="#fff" />
-          </TouchableOpacity>
-          <Text style={styles.topTitle}>Ficha del Paciente</Text>
+          <ScreenHeader title="Ficha del Paciente" />
         </View>
+
+        <View style={styles.headerDivider} />
 
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>{patientView.initials}</Text>
@@ -150,15 +208,18 @@ export default function PatientDetailScreen() {
         </View>
 
         <View style={styles.actionsRow}>
-            <TouchableOpacity
+          <TouchableOpacity
             style={styles.actionButton}
             onPress={() => router.push(`/appointments/new?patientId=${id}` as any)}
-            >
+          >
             <Ionicons name="calendar-outline" size={20} color="#fff" />
             <Text style={styles.actionButtonText}>Nuevo Turno</Text>
-            </TouchableOpacity>
+          </TouchableOpacity>
 
-          <TouchableOpacity style={[styles.actionButton, styles.actionButtonDisabled]} disabled>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => router.push(`/patients/edit/${id}` as any)}
+          >
             <Ionicons name="pencil-outline" size={20} color="#fff" />
             <Text style={styles.actionButtonText}>Editar datos</Text>
           </TouchableOpacity>
@@ -170,15 +231,15 @@ export default function PatientDetailScreen() {
           <Text style={styles.sectionTitle}>DATOS PERSONALES</Text>
 
           <View style={styles.infoRow}>
-            <Ionicons name="call-outline" size={26} color="#c8102e" />
+            <Ionicons name="call-outline" size={26} color={PRIMARY} />
             <View style={styles.infoTextBox}>
-              <Text style={styles.infoLabel}>TELÉFONO</Text>
+              <Text style={styles.infoLabel}>TELEFONO</Text>
               <Text style={styles.infoValue}>{patientView.phone}</Text>
             </View>
           </View>
 
           <View style={styles.infoRow}>
-            <Ionicons name="mail-outline" size={26} color="#c8102e" />
+            <Ionicons name="mail-outline" size={26} color={PRIMARY} />
             <View style={styles.infoTextBox}>
               <Text style={styles.infoLabel}>EMAIL</Text>
               <Text style={styles.infoValue}>{patientView.email}</Text>
@@ -186,7 +247,7 @@ export default function PatientDetailScreen() {
           </View>
 
           <View style={styles.infoRow}>
-            <Ionicons name="gift-outline" size={26} color="#c8102e" />
+            <Ionicons name="gift-outline" size={26} color={PRIMARY} />
             <View style={styles.infoTextBox}>
               <Text style={styles.infoLabel}>FECHA DE NACIMIENTO</Text>
               <Text style={styles.infoValue}>{patientView.birthDate}</Text>
@@ -212,235 +273,37 @@ export default function PatientDetailScreen() {
             <Text style={styles.emptyHistoryText}>Sin historial de turnos</Text>
           ) : (
             appointments.map((item) => (
-                <View key={item.id} style={styles.historyItem}>
-                <View style={styles.historyDot} />
+              (() => {
+                const statusStyles = getHistoryStatusStyle(item.status);
 
-                <View style={styles.historyContent}>
-                    <Text style={styles.historyTitle}>
-                    {item.date} - {item.time}
-                    </Text>
-                </View>
+                return (
+                  <View key={item.id} style={styles.historyItem}>
+                    <View style={styles.historyTopRow}>
+                      <View style={styles.historyMetaRow}>
+                        <View style={styles.historyDot} />
+                        <Ionicons name="calendar-outline" size={18} color="#9a9a9a" />
+                        <Text style={styles.historyMetaText}>{formatHistoryDate(item.date)}</Text>
+                        <Ionicons name="time-outline" size={18} color="#9a9a9a" />
+                        <Text style={styles.historyMetaText}>{item.time || "-"} hs</Text>
+                      </View>
 
-                <View style={styles.statusBadge}>
-                    <Text style={styles.statusText}>{item.status}</Text>
-                </View>
-            </View>
+                      <View style={statusStyles.badge}>
+                        <Text style={statusStyles.text}>{formatStatus(item.status)}</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.historyContent}>
+                      <Text style={styles.historyTitle}>{item.notes || "Sin detalle"}</Text>
+                    </View>
+
+                    <View style={styles.historyDivider} />
+                  </View>
+                );
+              })()
             ))
-            )}
+          )}
         </View>
       </View>
     </ScrollView>
   );
 }
-
-const PRIMARY = "#c8102e";
-const BG = "#efefef";
-const CARD = "#ffffff";
-const MUTED = "#8f8f8f";
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: PRIMARY,
-  },
-  content: {
-    paddingBottom: 30,
-  },
-  centered: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#fff",
-  },
-  hero: {
-    backgroundColor: PRIMARY,
-    paddingTop: 50,
-    paddingHorizontal: 22,
-    paddingBottom: 28,
-  },
-  topBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 30,
-    gap: 16,
-  },
-  topTitle: {
-    color: "#fff",
-    fontSize: 28,
-    fontWeight: "700",
-  },
-  avatar: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    borderWidth: 4,
-    borderColor: "rgba(255,255,255,0.45)",
-    backgroundColor: "rgba(255,255,255,0.18)",
-    alignSelf: "center",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  avatarText: {
-    color: "#fff",
-    fontSize: 34,
-    fontWeight: "700",
-  },
-  name: {
-    color: "#fff",
-    fontSize: 32,
-    fontWeight: "700",
-    textAlign: "center",
-    marginBottom: 18,
-  },
-  badgesRow: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 12,
-    marginBottom: 22,
-    flexWrap: "wrap",
-  },
-  badge: {
-    backgroundColor: "rgba(255,255,255,0.18)",
-    borderRadius: 30,
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  badgeLabel: {
-    color: "#ffd6dc",
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  badgeValue: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  actionsRow: {
-    flexDirection: "row",
-    gap: 14,
-  },
-  actionButton: {
-    flex: 1,
-    minHeight: 58,
-    borderRadius: 18,
-    borderWidth: 1.5,
-    borderColor: "rgba(255,255,255,0.28)",
-    backgroundColor: "rgba(255,255,255,0.12)",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-  },
-  actionButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  actionButtonDisabled: {
-    opacity: 0.55,
-  },
-  sheet: {
-    backgroundColor: BG,
-    borderTopLeftRadius: 34,
-    borderTopRightRadius: 34,
-    padding: 20,
-    minHeight: 700,
-  },
-  card: {
-    backgroundColor: CARD,
-    borderRadius: 24,
-    padding: 22,
-    marginBottom: 18,
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
-  },
-  sectionTitle: {
-    color: MUTED,
-    fontSize: 18,
-    fontWeight: "700",
-    letterSpacing: 1,
-    marginBottom: 22,
-  },
-  infoRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    marginBottom: 22,
-    gap: 16,
-  },
-  infoTextBox: {
-    flex: 1,
-  },
-  infoLabel: {
-    color: "#b0b0b0",
-    fontSize: 14,
-    fontWeight: "700",
-    marginBottom: 6,
-  },
-  infoValue: {
-    color: "#111",
-    fontSize: 18,
-    fontWeight: "500",
-  },
-  noteBox: {
-    borderLeftWidth: 4,
-    borderLeftColor: PRIMARY,
-    backgroundColor: "#f7f7f7",
-    borderRadius: 18,
-    padding: 18,
-  },
-  noteText: {
-    fontSize: 18,
-    color: "#333",
-  },
-  historyHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 18,
-  },
-  historyCount: {
-    color: "#c0c0c0",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  emptyHistoryText: {
-    color: "#777",
-    fontSize: 16,
-  },
-  historyItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  historyDot: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: "#2e9e44",
-  },
-  historyContent: {
-    flex: 1,
-  },
-  historyTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#222",
-  },
-  statusBadge: {
-    backgroundColor: "#dff0df",
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 12,
-  },
-  statusText: {
-    color: "#3b8d3e",
-    fontWeight: "700",
-    fontSize: 16,
-  },
-});

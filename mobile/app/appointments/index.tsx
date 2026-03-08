@@ -1,21 +1,21 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   View,
   Text,
-  StyleSheet,
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  TextInput,
   Pressable,
+  Keyboard,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
-import { API_URL } from "../../constants/api";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 
-type Patient = {
-  id: number;
-  name: string;
-};
+import { API_URL } from "../../constants/api";
+import { ScreenHeader } from "../../components/screen-header";
+import { COLORS } from "../../constants/colors";
+import { styles } from "../../src/screens/appointments/styles";
 
 type Appointment = {
   id: number;
@@ -30,45 +30,130 @@ type Appointment = {
   };
 };
 
+type Patient = {
+  id: number;
+  name: string;
+};
+
+const HISTORY_FILTERS = [
+  { key: "all", label: "Todos" },
+  { key: "atendido", label: "Atendidos" },
+  { key: "ausente", label: "Ausentes" },
+  { key: "cancelado", label: "Cancelados" },
+] as const;
+
 export default function AppointmentsScreen() {
+  const { mode } = useLocalSearchParams<{ mode?: string }>();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showPatientFilter, setShowPatientFilter] = useState(false);
-  const [selectedPatientId, setSelectedPatientId] = useState<number | "all">("all");
+  const [search, setSearch] = useState("");
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [historyFilter, setHistoryFilter] = useState<(typeof HISTORY_FILTERS)[number]["key"]>("all");
 
-  useEffect(() => {
-    async function loadData() {
-      try {
-        const [appointmentsRes, patientsRes] = await Promise.all([
-          fetch(`${API_URL}/appointments/upcoming`),
-          fetch(`${API_URL}/patients`),
-        ]);
+  const isHistoryMode = mode === "history";
 
-        const appointmentsData = await appointmentsRes.json();
-        const patientsData = await patientsRes.json();
+  useFocusEffect(
+    useCallback(() => {
+      async function loadAppointments() {
+        try {
+          const patientsResponse = await fetch(`${API_URL}/patients`);
+          const patientsData = await patientsResponse.json();
+          const safePatients = Array.isArray(patientsData) ? patientsData : [];
 
-        setAppointments(Array.isArray(appointmentsData) ? appointmentsData : []);
-        setPatients(Array.isArray(patientsData) ? patientsData : []);
-      } catch (error) {
-        console.log("Error cargando turnos:", error);
-      } finally {
-        setLoading(false);
+          setPatients(safePatients);
+
+          if (!isHistoryMode) {
+            const appointmentsResponse = await fetch(`${API_URL}/appointments/upcoming`);
+            const appointmentsData = await appointmentsResponse.json();
+            const safeAppointments = Array.isArray(appointmentsData) ? appointmentsData : [];
+
+            setAppointments(
+              safeAppointments.filter(
+                (appointment) => appointment.status?.toLowerCase() === "pendiente"
+              )
+            );
+
+            return;
+          }
+
+          const historyResponses = await Promise.all(
+            safePatients.map((patient) => fetch(`${API_URL}/appointments/patient/${patient.id}`))
+          );
+          const historyData = await Promise.all(historyResponses.map((response) => response.json()));
+
+          const mergedHistory = historyData
+            .flatMap((items) => (Array.isArray(items) ? items : []))
+            .filter((appointment): appointment is Appointment => Boolean(appointment?.id))
+            .filter((appointment) => appointment.status?.toLowerCase() !== "pendiente")
+            .reduce<Appointment[]>((accumulator, appointment) => {
+              if (accumulator.some((item) => item.id === appointment.id)) {
+                return accumulator;
+              }
+
+              accumulator.push(appointment);
+              return accumulator;
+            }, []);
+
+          setAppointments(mergedHistory);
+        } catch (error) {
+          console.log("Error cargando turnos:", error);
+        } finally {
+          setLoading(false);
+        }
       }
-    }
 
-    loadData();
-  }, []);
+      setLoading(true);
+      loadAppointments();
+    }, [isHistoryMode])
+  );
 
   const filteredAppointments = useMemo(() => {
-    if (selectedPatientId === "all") return appointments;
+    const query = search.trim().toLowerCase();
 
-    return appointments.filter(
-      (appointment) => appointment.patientId === selectedPatientId
-    );
-  }, [appointments, selectedPatientId]);
+    return appointments
+      .filter((appointment) => {
+        const normalizedStatus = appointment.status?.toLowerCase();
 
-  function formatDate(dateString: string) {
+        if (isHistoryMode) {
+          if (!normalizedStatus || normalizedStatus === "pendiente") {
+            return false;
+          }
+
+          return historyFilter === "all" ? true : normalizedStatus === historyFilter;
+        }
+
+        return normalizedStatus === "pendiente";
+      })
+      .filter((appointment) => {
+        if (!query) {
+          return true;
+        }
+
+        const patientName = appointment.patient?.name?.toLowerCase() || "";
+        const reason = appointment.notes?.toLowerCase() || "";
+
+        return patientName.includes(query) || reason.includes(query);
+      })
+      .sort((a, b) => {
+        const aDate = new Date(`${a.date}T${a.time || "00:00"}:00`).getTime();
+        const bDate = new Date(`${b.date}T${b.time || "00:00"}:00`).getTime();
+
+        return isHistoryMode ? bDate - aDate : aDate - bDate;
+      });
+  }, [appointments, historyFilter, isHistoryMode, search]);
+
+  const patientSuggestions = useMemo(() => {
+    const query = search.trim().toLowerCase();
+
+    if (!query) {
+      return patients;
+    }
+
+    return patients.filter((patient) => patient.name.toLowerCase().includes(query));
+  }, [patients, search]);
+
+  function formatDateLabel(dateString: string) {
     if (!dateString) return "-";
 
     const date = new Date(`${dateString}T00:00:00`);
@@ -78,21 +163,25 @@ export default function AppointmentsScreen() {
       weekday: "short",
       day: "2-digit",
       month: "short",
-      year: "numeric",
     });
   }
 
+  function formatTime(time?: string) {
+    if (!time) return "-";
+    return time;
+  }
+
   function getStatusLabel(status?: string) {
-    if (!status) return "Pendiente";
+    if (!status) return "Programado";
 
     const normalized = status.toLowerCase();
 
-    if (normalized === "pendiente") return "Pendiente";
     if (normalized === "atendido") return "Atendido";
-    if (normalized === "programado") return "Programado";
+    if (normalized === "pendiente") return "Programado";
+    if (normalized === "ausente") return "Ausente";
     if (normalized === "cancelado") return "Cancelado";
 
-    return status;
+    return "Programado";
   }
 
   function getStatusStyle(status?: string) {
@@ -102,469 +191,221 @@ export default function AppointmentsScreen() {
       return {
         badge: styles.statusBadgeSuccess,
         text: styles.statusTextSuccess,
-        line: styles.leftLineSuccess,
+        dateBox: styles.dateColumnSuccess,
+        timeText: styles.timeTextSuccess,
+        dateText: styles.dateTextSuccess,
       };
     }
 
     if (normalized === "cancelado") {
       return {
         badge: styles.statusBadgeDanger,
+        text: styles.statusTextMuted,
+        dateBox: styles.dateColumnDanger,
+        timeText: styles.timeTextMuted,
+        dateText: styles.dateTextMuted,
+      };
+    }
+
+    if (normalized === "ausente") {
+      return {
+        badge: styles.statusBadgeDanger,
         text: styles.statusTextDanger,
-        line: styles.leftLineDanger,
+        dateBox: styles.dateColumnDanger,
+        timeText: styles.timeTextDanger,
+        dateText: styles.dateTextDanger,
       };
     }
 
     return {
-      badge: styles.statusBadgeInfo,
-      text: styles.statusTextInfo,
-      line: styles.leftLineInfo,
+      badge: styles.statusBadgeWarning,
+      text: styles.statusTextWarning,
+      dateBox: styles.dateColumnWarning,
+      timeText: styles.timeTextWarning,
+      dateText: styles.dateTextWarning,
     };
   }
 
-  const selectedPatient =
-    selectedPatientId === "all"
-      ? null
-      : patients.find((p) => p.id === selectedPatientId);
+  const headerTitle = isHistoryMode ? "Historial" : "Agenda de Turnos";
+  const searchPlaceholder = isHistoryMode
+    ? "Buscar en historial por paciente o motivo..."
+    : "Buscar turnos programados...";
+  const counterLabel = isHistoryMode ? "REGISTROS ENCONTRADOS" : "TURNOS PROGRAMADOS";
+  const emptyText = isHistoryMode
+    ? "No hay turnos en el historial para mostrar"
+    : "No hay turnos programados para mostrar";
+  const loadingText = isHistoryMode ? "Cargando historial..." : "Cargando agenda...";
 
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#c8102e" />
-        <Text style={styles.loadingText}>Cargando turnos...</Text>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+        <Text style={styles.loadingText}>{loadingText}</Text>
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1 }}>
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        <View style={styles.header}>
-          <View style={styles.headerTop}>
-            <TouchableOpacity onPress={() => router.back()}>
-              <Ionicons name="arrow-back" size={30} color="#fff" />
-            </TouchableOpacity>
+    <View style={styles.screen}>
+      {showSuggestions ? (
+        <Pressable
+          style={styles.backdrop}
+          onPress={() => {
+            setShowSuggestions(false);
+            Keyboard.dismiss();
+          }}
+        />
+      ) : null}
 
-            <Text style={styles.headerTitle}>Historial de Turnos</Text>
-          </View>
+      <View style={styles.header}>
+        <ScreenHeader title={headerTitle} />
 
-          <TouchableOpacity
-            style={styles.filterBox}
-            onPress={() => setShowPatientFilter((prev) => !prev)}
-          >
-            <View style={styles.filterLeft}>
-              <Ionicons name="people" size={28} color="#fff" />
-              <View>
-                <Text style={styles.filterTitle}>
-                  {selectedPatientId === "all"
-                    ? "Todos los pacientes"
-                    : selectedPatient?.name || "Paciente"}
-                </Text>
-                <Text style={styles.filterSubtitle}>
-                  Toca para filtrar por paciente
-                </Text>
-              </View>
-            </View>
-
-            <Ionicons
-              name={showPatientFilter ? "chevron-up" : "chevron-down"}
-              size={28}
-              color="#ffd8df"
-            />
-          </TouchableOpacity>
-        </View>
-
-        <Text
-          style={[
-            styles.totalText,
-            showPatientFilter ? { marginTop: 220 } : null,
-          ]}
+        <TouchableOpacity
+          style={styles.searchBox}
+          activeOpacity={1}
+          onPress={() => setShowSuggestions(true)}
         >
-          {filteredAppointments.length} REGISTROS EN TOTAL
-        </Text>
+          <Ionicons name="search-outline" size={28} color="#8f8f8f" />
+          <TextInput
+            placeholder={searchPlaceholder}
+            placeholderTextColor="#9a9a9a"
+            style={styles.searchInput}
+            value={search}
+            onChangeText={setSearch}
+            onFocus={() => setShowSuggestions(true)}
+          />
+        </TouchableOpacity>
 
-        <View style={styles.list}>
-          {filteredAppointments.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>No hay turnos para mostrar</Text>
-            </View>
-          ) : (
-            filteredAppointments.map((appointment) => {
-              const statusStyles = getStatusStyle(appointment.status);
+        {isHistoryMode ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filtersRow}
+          >
+            {HISTORY_FILTERS.map((filter) => {
+              const isActive = historyFilter === filter.key;
 
               return (
-                <View key={appointment.id} style={styles.cardWrapper}>
-                  <View style={[styles.leftLine, statusStyles.line]} />
-
-                  <View style={styles.card}>
-                    <View style={styles.cardTop}>
-                      <Text style={styles.patientName}>
-                        {appointment.patient?.name || "Paciente sin nombre"}
-                      </Text>
-
-                      <View style={[styles.statusBadge, statusStyles.badge]}>
-                        <Text style={[styles.statusText, statusStyles.text]}>
-                          {getStatusLabel(appointment.status)}
-                        </Text>
-                      </View>
-                    </View>
-
-                    <View style={styles.metaRow}>
-                      <View style={styles.metaItem}>
-                        <Ionicons
-                          name="calendar-outline"
-                          size={18}
-                          color="#9a9a9a"
-                        />
-                        <Text style={styles.metaText}>
-                          {formatDate(appointment.date)}
-                        </Text>
-                      </View>
-
-                      <View style={styles.metaItem}>
-                        <Ionicons name="time-outline" size={18} color="#9a9a9a" />
-                        <Text style={styles.metaText}>{appointment.time} hs</Text>
-                      </View>
-                    </View>
-
-                    <Text style={styles.reasonText}>
-                      {appointment.notes || "Sin detalle"}
-                    </Text>
-
-                    <View style={styles.divider} />
-
-                    <View style={styles.actionsRow}>
-                      <TouchableOpacity style={styles.actionItem}>
-                        <Ionicons
-                          name="checkmark-circle-outline"
-                          size={24}
-                          color="#1976d2"
-                        />
-                        <Text style={styles.actionBlue}>Estado</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity style={styles.actionItem}>
-                        <Ionicons name="create-outline" size={24} color="#f57c00" />
-                        <Text style={styles.actionOrange}>Editar</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity style={styles.iconOnlyAction}>
-                        <Ionicons name="trash-outline" size={24} color="#e53935" />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                </View>
+                <TouchableOpacity
+                  key={filter.key}
+                  style={[styles.filterChip, isActive ? styles.filterChipActive : null]}
+                  activeOpacity={0.85}
+                  onPress={() => setHistoryFilter(filter.key)}
+                >
+                  <Text
+                    style={[styles.filterChipText, isActive ? styles.filterChipTextActive : null]}
+                  >
+                    {filter.label}
+                  </Text>
+                </TouchableOpacity>
               );
-            })
-          )}
-        </View>
-      </ScrollView>
+            })}
+          </ScrollView>
+        ) : null}
 
-      {showPatientFilter && (
-        <>
-          <Pressable
-            style={styles.backdrop}
-            onPress={() => setShowPatientFilter(false)}
-          />
-
-          <View style={styles.filterDropdown}>
-            <TouchableOpacity
-              style={styles.filterOption}
-              onPress={() => {
-                setShowPatientFilter(false);
-                router.push("/appointments/new" as any);
-              }}
-            >
-              <Ionicons name="add-circle-outline" size={22} color="#c8102e" />
-              <Text style={styles.filterOptionText}>Nuevo turno</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.filterOption}
-              onPress={() => {
-                setSelectedPatientId("all");
-                setShowPatientFilter(false);
-              }}
-            >
-              <Ionicons name="people-outline" size={22} color="#555" />
-              <Text style={styles.filterOptionText}>Todos los pacientes</Text>
-            </TouchableOpacity>
-
-            <ScrollView nestedScrollEnabled style={{ maxHeight: 320 }}>
-              {patients.map((patient) => (
+        {showSuggestions && patientSuggestions.length > 0 ? (
+          <View style={styles.suggestionsBox}>
+            <ScrollView nestedScrollEnabled style={styles.suggestionsScroll}>
+              {patientSuggestions.map((patient) => (
                 <TouchableOpacity
                   key={patient.id}
-                  style={styles.filterOption}
+                  style={styles.suggestionItem}
+                  activeOpacity={0.85}
                   onPress={() => {
-                    setSelectedPatientId(patient.id);
-                    setShowPatientFilter(false);
+                    setSearch(patient.name);
+                    setShowSuggestions(false);
+                    Keyboard.dismiss();
                   }}
                 >
-                  <Ionicons name="person-outline" size={22} color="#555" />
-                  <Text style={styles.filterOptionText}>{patient.name}</Text>
+                  <Ionicons name="person-outline" size={18} color="#777" />
+                  <Text style={styles.suggestionText}>{patient.name}</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
           </View>
-        </>
-      )}
+        ) : null}
+      </View>
+
+      <ScrollView style={styles.listScreen} contentContainerStyle={styles.content}>
+        <Text style={styles.counterText}>{filteredAppointments.length} {counterLabel}</Text>
+
+        {filteredAppointments.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyText}>{emptyText}</Text>
+          </View>
+        ) : (
+          filteredAppointments.map((appointment) => {
+            const statusStyles = getStatusStyle(appointment.status);
+
+            return (
+              <TouchableOpacity
+                key={appointment.id}
+                style={styles.card}
+                activeOpacity={0.92}
+                onPress={() => router.push(`/appointments/${appointment.id}` as any)}
+              >
+                <View style={[styles.dateColumn, statusStyles.dateBox]}>
+                  <Text style={[styles.timeText, statusStyles.timeText]}>{formatTime(appointment.time)}</Text>
+                  <Text style={[styles.dateText, statusStyles.dateText]}>{formatDateLabel(appointment.date)}</Text>
+                </View>
+
+                <View style={styles.cardDivider} />
+
+                <View style={styles.cardContent}>
+                  <View style={styles.cardTopRow}>
+                    <View style={styles.titleBlock}>
+                      <Text style={styles.patientName}>
+                        {appointment.patient?.name || "Paciente sin nombre"}
+                      </Text>
+                      <Text style={styles.reasonText}>{appointment.notes || "Sin detalle"}</Text>
+                    </View>
+
+                    <View style={[styles.statusBadge, statusStyles.badge]}>
+                      <Text style={[styles.statusBadgeText, statusStyles.text]}>
+                        {getStatusLabel(appointment.status)}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.innerDivider} />
+
+                  <View style={styles.actionsRow}>
+                    <TouchableOpacity
+                      style={styles.actionItem}
+                      activeOpacity={0.85}
+                      onPress={() => router.push(`/appointments/${appointment.id}` as any)}
+                    >
+                      <Ionicons name="checkmark-circle-outline" size={24} color="#d2a106" />
+                      <Text style={styles.actionStatus}>Estado</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.actionItem}
+                      activeOpacity={0.85}
+                      onPress={() => router.push(`/appointments/edit/${appointment.id}` as any)}
+                    >
+                      <Ionicons name="create-outline" size={24} color={COLORS.primary} />
+                      <Text style={styles.actionEdit}>Editar</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={styles.iconOnlyAction} activeOpacity={0.85}>
+                      <Ionicons name="trash-outline" size={24} color="#df2f2f" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            );
+          })
+        )}
+      </ScrollView>
+
+      <TouchableOpacity
+        style={styles.fab}
+        activeOpacity={0.9}
+        onPress={() => router.push("/appointments/new" as any)}
+      >
+        <Ionicons name="add" size={34} color="#fff" />
+      </TouchableOpacity>
     </View>
   );
 }
-
-const PRIMARY = "#c8102e";
-const BG = "#efefef";
-const CARD = "#ffffff";
-const MUTED = "#8f8f8f";
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: BG,
-  },
-  content: {
-    paddingBottom: 30,
-  },
-  loadingContainer: {
-    flex: 1,
-    backgroundColor: BG,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: "#666",
-  },
-  header: {
-    backgroundColor: PRIMARY,
-    paddingTop: 55,
-    paddingBottom: 24,
-    paddingHorizontal: 20,
-    marginBottom: 18,
-    position: "relative",
-    zIndex: 20,
-  },
-  headerTop: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 16,
-    marginBottom: 22,
-  },
-  headerTitle: {
-    color: "#fff",
-    fontSize: 28,
-    fontWeight: "700",
-  },
-  filterBox: {
-    backgroundColor: "rgba(255,255,255,0.16)",
-    borderRadius: 22,
-    paddingHorizontal: 18,
-    paddingVertical: 18,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  filterLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-  },
-  filterTitle: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: "700",
-  },
-  filterSubtitle: {
-    color: "#ffd8df",
-    fontSize: 14,
-    marginTop: 2,
-  },
-  totalText: {
-    color: MUTED,
-    fontSize: 16,
-    fontWeight: "700",
-    letterSpacing: 1,
-    marginHorizontal: 20,
-    marginBottom: 18,
-  },
-  list: {
-    paddingHorizontal: 20,
-    gap: 16,
-  },
-  emptyCard: {
-    backgroundColor: CARD,
-    borderRadius: 20,
-    padding: 24,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: "#666",
-  },
-  cardWrapper: {
-    position: "relative",
-  },
-  leftLine: {
-    position: "absolute",
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 6,
-    borderTopLeftRadius: 20,
-    borderBottomLeftRadius: 20,
-    zIndex: 2,
-  },
-  leftLineSuccess: {
-    backgroundColor: "#2e9e44",
-  },
-  leftLineInfo: {
-    backgroundColor: "#1976d2",
-  },
-  leftLineDanger: {
-    backgroundColor: "#e53935",
-  },
-  card: {
-    backgroundColor: CARD,
-    borderRadius: 24,
-    padding: 20,
-    paddingLeft: 28,
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
-  },
-  cardTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 12,
-    gap: 10,
-  },
-  patientName: {
-    flex: 1,
-    fontSize: 22,
-    fontWeight: "700",
-    color: "#111",
-  },
-  statusBadge: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 12,
-  },
-  statusBadgeSuccess: {
-    backgroundColor: "#dff0df",
-  },
-  statusBadgeInfo: {
-    backgroundColor: "#e3eefc",
-  },
-  statusBadgeDanger: {
-    backgroundColor: "#fde7e7",
-  },
-  statusText: {
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  statusTextSuccess: {
-    color: "#3b8d3e",
-  },
-  statusTextInfo: {
-    color: "#1976d2",
-  },
-  statusTextDanger: {
-    color: "#d32f2f",
-  },
-  metaRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 16,
-    marginBottom: 14,
-  },
-  metaItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  metaText: {
-    fontSize: 15,
-    color: "#8d8d8d",
-  },
-  reasonText: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#222",
-    marginBottom: 16,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: "#ececec",
-    marginBottom: 14,
-  },
-  actionsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  actionItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  actionBlue: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#1976d2",
-  },
-  actionOrange: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#f57c00",
-  },
-  iconOnlyAction: {
-    padding: 4,
-  },
-
-  filterDropdown: {
-    position: "absolute",
-    top: 140,
-    left: 20,
-    right: 20,
-    backgroundColor: "#fff",
-    borderRadius: 20,
-    overflow: "hidden",
-    zIndex: 50,
-    elevation: 15,
-
-    shadowColor: "#000",
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
-
-    maxHeight: 420,
-  },
-
-filterOption: {
-  flexDirection: "row",
-  alignItems: "center",
-  gap: 12,
-  paddingVertical: 16,
-  paddingHorizontal: 18,
-  borderBottomWidth: 1,
-  borderBottomColor: "#f0f0f0",
-},
-
-filterOptionText: {
-  fontSize: 17,
-  color: "#222",
-  fontWeight: "500",
-},
-
-backdrop: {
-  position: "absolute",
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-  backgroundColor: "transparent",
-  zIndex: 40,
-},
-});

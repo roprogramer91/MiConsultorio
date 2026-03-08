@@ -118,6 +118,14 @@ export const styles = StyleSheet.create({
     letterSpacing: 1,
     marginBottom: 14,
   },
+  sectionCounterTitle: {
+    color: COLORS.textMuted,
+    fontSize: 13,
+    fontWeight: "800",
+    letterSpacing: 1,
+    marginBottom: 12,
+    marginTop: 6,
+  },
   emptyCard: {
     backgroundColor: COLORS.white,
     borderRadius: 22,

@@ -190,6 +190,34 @@ export const updateAppointment = async (req, res) => {
   }
 };
 
+export const deleteAppointment = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const appointmentId = Number(id);
+
+    if (Number.isNaN(appointmentId)) {
+      return res.status(400).json({ error: "ID de turno invalido" });
+    }
+
+    const existingAppointment = await prisma.appointment.findUnique({
+      where: { id: appointmentId },
+    });
+
+    if (!existingAppointment) {
+      return res.status(404).json({ error: "Turno no encontrado" });
+    }
+
+    await prisma.appointment.delete({
+      where: { id: appointmentId },
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Error eliminando turno:", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+};
+
 //ACTUALIZAR ESTADO DEL TURNO   
 export const updateAppointmentStatus = async (req, res) => {
   try {

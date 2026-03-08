@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import {
+  Alert,
   View,
   Text,
   ScrollView,
@@ -42,6 +43,38 @@ const HISTORY_FILTERS = [
   { key: "cancelado", label: "Cancelados" },
 ] as const;
 
+function getAppointmentTimestamp(date?: string, time?: string) {
+  return new Date(`${date}T${time || "00:00"}:00`).getTime();
+}
+
+function isPendingReviewAppointment(appointment: Appointment) {
+  const normalizedStatus = appointment.status?.toLowerCase();
+  const appointmentTimestamp = getAppointmentTimestamp(appointment.date, appointment.time);
+
+  return (
+    normalizedStatus === "pendiente" &&
+    !Number.isNaN(appointmentTimestamp) &&
+    appointmentTimestamp < Date.now()
+  );
+}
+
+function isUpcomingPendingAppointment(appointment: Appointment) {
+  const normalizedStatus = appointment.status?.toLowerCase();
+  const appointmentTimestamp = getAppointmentTimestamp(appointment.date, appointment.time);
+
+  return (
+    normalizedStatus === "pendiente" &&
+    !Number.isNaN(appointmentTimestamp) &&
+    appointmentTimestamp >= Date.now()
+  );
+}
+
+function isClosedAppointment(appointment: Appointment) {
+  const normalizedStatus = appointment.status?.toLowerCase();
+
+  return normalizedStatus === "atendido" || normalizedStatus === "ausente" || normalizedStatus === "cancelado";
+}
+
 export default function AppointmentsScreen() {
   const { mode } = useLocalSearchParams<{ mode?: string }>();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -52,6 +85,41 @@ export default function AppointmentsScreen() {
   const [historyFilter, setHistoryFilter] = useState<(typeof HISTORY_FILTERS)[number]["key"]>("all");
 
   const isHistoryMode = mode === "history";
+
+  async function removeAppointment(appointmentId: number) {
+    try {
+      const response = await fetch(`${API_URL}/appointments/${appointmentId}`, {
+        method: "DELETE",
+      });
+      const raw = await response.text();
+      const data = raw ? JSON.parse(raw) : {};
+
+      if (!response.ok) {
+        Alert.alert("Error", data.error || "No se pudo eliminar el turno");
+        return;
+      }
+
+      setAppointments((current) => current.filter((appointment) => appointment.id !== appointmentId));
+      Alert.alert("Turno eliminado", "El turno se eliminó correctamente");
+    } catch (error) {
+      Alert.alert("Error", "No se pudo eliminar el turno. Revisa el backend y vuelve a intentar.");
+    }
+  }
+
+  function handleDeleteAppointment(appointment: Appointment) {
+    Alert.alert(
+      "Eliminar turno",
+      `Se eliminara el turno de ${appointment.patient?.name || "este paciente"}. Esta accion no se puede deshacer.`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Eliminar",
+          style: "destructive",
+          onPress: () => removeAppointment(appointment.id),
+        },
+      ]
+    );
+  }
 
   useFocusEffect(
     useCallback(() => {
@@ -68,11 +136,7 @@ export default function AppointmentsScreen() {
             const appointmentsData = await appointmentsResponse.json();
             const safeAppointments = Array.isArray(appointmentsData) ? appointmentsData : [];
 
-            setAppointments(
-              safeAppointments.filter(
-                (appointment) => appointment.status?.toLowerCase() === "pendiente"
-              )
-            );
+            setAppointments(safeAppointments);
 
             return;
           }
@@ -85,7 +149,6 @@ export default function AppointmentsScreen() {
           const mergedHistory = historyData
             .flatMap((items) => (Array.isArray(items) ? items : []))
             .filter((appointment): appointment is Appointment => Boolean(appointment?.id))
-            .filter((appointment) => appointment.status?.toLowerCase() !== "pendiente")
             .reduce<Appointment[]>((accumulator, appointment) => {
               if (accumulator.some((item) => item.id === appointment.id)) {
                 return accumulator;
@@ -116,14 +179,14 @@ export default function AppointmentsScreen() {
         const normalizedStatus = appointment.status?.toLowerCase();
 
         if (isHistoryMode) {
-          if (!normalizedStatus || normalizedStatus === "pendiente") {
+          if (!isClosedAppointment(appointment)) {
             return false;
           }
 
           return historyFilter === "all" ? true : normalizedStatus === historyFilter;
         }
 
-        return normalizedStatus === "pendiente";
+        return isUpcomingPendingAppointment(appointment) || isPendingReviewAppointment(appointment);
       })
       .filter((appointment) => {
         if (!query) {
@@ -184,6 +247,14 @@ export default function AppointmentsScreen() {
     return "Programado";
   }
 
+  function getVisualStatusLabel(appointment: Appointment) {
+    if (isPendingReviewAppointment(appointment)) {
+      return "Pendiente de cierre";
+    }
+
+    return getStatusLabel(appointment.status);
+  }
+
   function getStatusStyle(status?: string) {
     const normalized = status?.toLowerCase();
 
@@ -226,6 +297,20 @@ export default function AppointmentsScreen() {
     };
   }
 
+  function getVisualStatusStyle(appointment: Appointment) {
+    if (isPendingReviewAppointment(appointment)) {
+      return {
+        badge: styles.statusBadgeDanger,
+        text: styles.statusTextDanger,
+        dateBox: styles.dateColumnDanger,
+        timeText: styles.timeTextDanger,
+        dateText: styles.dateTextDanger,
+      };
+    }
+
+    return getStatusStyle(appointment.status);
+  }
+
   const headerTitle = isHistoryMode ? "Historial" : "Agenda de Turnos";
   const searchPlaceholder = isHistoryMode
     ? "Buscar en historial por paciente o motivo..."
@@ -235,6 +320,12 @@ export default function AppointmentsScreen() {
     ? "No hay turnos en el historial para mostrar"
     : "No hay turnos programados para mostrar";
   const loadingText = isHistoryMode ? "Cargando historial..." : "Cargando agenda...";
+  const upcomingAgendaAppointments = isHistoryMode
+    ? []
+    : filteredAppointments.filter((appointment) => isUpcomingPendingAppointment(appointment));
+  const pendingReviewAppointments = isHistoryMode
+    ? []
+    : filteredAppointments.filter((appointment) => isPendingReviewAppointment(appointment));
 
   if (loading) {
     return (
@@ -329,73 +420,229 @@ export default function AppointmentsScreen() {
       <ScrollView style={styles.listScreen} contentContainerStyle={styles.content}>
         <Text style={styles.counterText}>{filteredAppointments.length} {counterLabel}</Text>
 
-        {filteredAppointments.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>{emptyText}</Text>
-          </View>
+        {isHistoryMode ? (
+          filteredAppointments.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyText}>{emptyText}</Text>
+            </View>
+          ) : (
+            filteredAppointments.map((appointment) => {
+              const statusStyles = getVisualStatusStyle(appointment);
+
+              return (
+                <TouchableOpacity
+                  key={appointment.id}
+                  style={styles.card}
+                  activeOpacity={0.92}
+                  onPress={() => router.push(`/appointments/${appointment.id}` as any)}
+                >
+                  <View style={[styles.dateColumn, statusStyles.dateBox]}>
+                    <Text style={[styles.timeText, statusStyles.timeText]}>{formatTime(appointment.time)}</Text>
+                    <Text style={[styles.dateText, statusStyles.dateText]}>{formatDateLabel(appointment.date)}</Text>
+                  </View>
+
+                  <View style={styles.cardDivider} />
+
+                  <View style={styles.cardContent}>
+                    <View style={styles.cardTopRow}>
+                      <View style={styles.titleBlock}>
+                        <Text style={styles.patientName}>
+                          {appointment.patient?.name || "Paciente sin nombre"}
+                        </Text>
+                        <Text style={styles.reasonText}>{appointment.notes || "Sin detalle"}</Text>
+                      </View>
+
+                      <View style={[styles.statusBadge, statusStyles.badge]}>
+                        <Text style={[styles.statusBadgeText, statusStyles.text]}>
+                          {getVisualStatusLabel(appointment)}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.innerDivider} />
+
+                    <View style={styles.actionsRow}>
+                      <TouchableOpacity
+                        style={styles.actionItem}
+                        activeOpacity={0.85}
+                        onPress={() => router.push(`/appointments/${appointment.id}` as any)}
+                      >
+                        <Ionicons name="checkmark-circle-outline" size={24} color="#d2a106" />
+                        <Text style={styles.actionStatus}>Estado</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.actionItem}
+                        activeOpacity={0.85}
+                        onPress={() => router.push(`/appointments/edit/${appointment.id}` as any)}
+                      >
+                        <Ionicons name="create-outline" size={24} color={COLORS.primary} />
+                        <Text style={styles.actionEdit}>Editar</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.iconOnlyAction}
+                        activeOpacity={0.85}
+                        onPress={() => handleDeleteAppointment(appointment)}
+                      >
+                        <Ionicons name="trash-outline" size={24} color="#df2f2f" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              );
+            })
+          )
         ) : (
-          filteredAppointments.map((appointment) => {
-            const statusStyles = getStatusStyle(appointment.status);
+          <>
+            <Text style={styles.sectionCounterTitle}>PROGRAMADOS</Text>
+            {upcomingAgendaAppointments.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <Text style={styles.emptyText}>No hay turnos programados para mostrar</Text>
+              </View>
+            ) : (
+              upcomingAgendaAppointments.map((appointment) => {
+                const statusStyles = getVisualStatusStyle(appointment);
 
-            return (
-              <TouchableOpacity
-                key={appointment.id}
-                style={styles.card}
-                activeOpacity={0.92}
-                onPress={() => router.push(`/appointments/${appointment.id}` as any)}
-              >
-                <View style={[styles.dateColumn, statusStyles.dateBox]}>
-                  <Text style={[styles.timeText, statusStyles.timeText]}>{formatTime(appointment.time)}</Text>
-                  <Text style={[styles.dateText, statusStyles.dateText]}>{formatDateLabel(appointment.date)}</Text>
-                </View>
-
-                <View style={styles.cardDivider} />
-
-                <View style={styles.cardContent}>
-                  <View style={styles.cardTopRow}>
-                    <View style={styles.titleBlock}>
-                      <Text style={styles.patientName}>
-                        {appointment.patient?.name || "Paciente sin nombre"}
-                      </Text>
-                      <Text style={styles.reasonText}>{appointment.notes || "Sin detalle"}</Text>
+                return (
+                  <TouchableOpacity
+                    key={appointment.id}
+                    style={styles.card}
+                    activeOpacity={0.92}
+                    onPress={() => router.push(`/appointments/${appointment.id}` as any)}
+                  >
+                    <View style={[styles.dateColumn, statusStyles.dateBox]}>
+                      <Text style={[styles.timeText, statusStyles.timeText]}>{formatTime(appointment.time)}</Text>
+                      <Text style={[styles.dateText, statusStyles.dateText]}>{formatDateLabel(appointment.date)}</Text>
                     </View>
 
-                    <View style={[styles.statusBadge, statusStyles.badge]}>
-                      <Text style={[styles.statusBadgeText, statusStyles.text]}>
-                        {getStatusLabel(appointment.status)}
-                      </Text>
+                    <View style={styles.cardDivider} />
+
+                    <View style={styles.cardContent}>
+                      <View style={styles.cardTopRow}>
+                        <View style={styles.titleBlock}>
+                          <Text style={styles.patientName}>
+                            {appointment.patient?.name || "Paciente sin nombre"}
+                          </Text>
+                          <Text style={styles.reasonText}>{appointment.notes || "Sin detalle"}</Text>
+                        </View>
+
+                        <View style={[styles.statusBadge, statusStyles.badge]}>
+                          <Text style={[styles.statusBadgeText, statusStyles.text]}>
+                            {getVisualStatusLabel(appointment)}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.innerDivider} />
+
+                      <View style={styles.actionsRow}>
+                        <TouchableOpacity
+                          style={styles.actionItem}
+                          activeOpacity={0.85}
+                          onPress={() => router.push(`/appointments/${appointment.id}` as any)}
+                        >
+                          <Ionicons name="checkmark-circle-outline" size={24} color="#d2a106" />
+                          <Text style={styles.actionStatus}>Estado</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.actionItem}
+                          activeOpacity={0.85}
+                          onPress={() => router.push(`/appointments/edit/${appointment.id}` as any)}
+                        >
+                          <Ionicons name="create-outline" size={24} color={COLORS.primary} />
+                          <Text style={styles.actionEdit}>Editar</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.iconOnlyAction}
+                          activeOpacity={0.85}
+                          onPress={() => handleDeleteAppointment(appointment)}
+                        >
+                          <Ionicons name="trash-outline" size={24} color="#df2f2f" />
+                        </TouchableOpacity>
+                      </View>
                     </View>
-                  </View>
+                  </TouchableOpacity>
+                );
+              })
+            )}
 
-                  <View style={styles.innerDivider} />
+            <Text style={styles.sectionCounterTitle}>PENDIENTES DE CIERRE</Text>
+            {pendingReviewAppointments.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <Text style={styles.emptyText}>No hay turnos pendientes de cierre</Text>
+              </View>
+            ) : (
+              pendingReviewAppointments.map((appointment) => {
+                const statusStyles = getVisualStatusStyle(appointment);
 
-                  <View style={styles.actionsRow}>
-                    <TouchableOpacity
-                      style={styles.actionItem}
-                      activeOpacity={0.85}
-                      onPress={() => router.push(`/appointments/${appointment.id}` as any)}
-                    >
-                      <Ionicons name="checkmark-circle-outline" size={24} color="#d2a106" />
-                      <Text style={styles.actionStatus}>Estado</Text>
-                    </TouchableOpacity>
+                return (
+                  <TouchableOpacity
+                    key={appointment.id}
+                    style={styles.card}
+                    activeOpacity={0.92}
+                    onPress={() => router.push(`/appointments/${appointment.id}` as any)}
+                  >
+                    <View style={[styles.dateColumn, statusStyles.dateBox]}>
+                      <Text style={[styles.timeText, statusStyles.timeText]}>{formatTime(appointment.time)}</Text>
+                      <Text style={[styles.dateText, statusStyles.dateText]}>{formatDateLabel(appointment.date)}</Text>
+                    </View>
 
-                    <TouchableOpacity
-                      style={styles.actionItem}
-                      activeOpacity={0.85}
-                      onPress={() => router.push(`/appointments/edit/${appointment.id}` as any)}
-                    >
-                      <Ionicons name="create-outline" size={24} color={COLORS.primary} />
-                      <Text style={styles.actionEdit}>Editar</Text>
-                    </TouchableOpacity>
+                    <View style={styles.cardDivider} />
 
-                    <TouchableOpacity style={styles.iconOnlyAction} activeOpacity={0.85}>
-                      <Ionicons name="trash-outline" size={24} color="#df2f2f" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </TouchableOpacity>
-            );
-          })
+                    <View style={styles.cardContent}>
+                      <View style={styles.cardTopRow}>
+                        <View style={styles.titleBlock}>
+                          <Text style={styles.patientName}>
+                            {appointment.patient?.name || "Paciente sin nombre"}
+                          </Text>
+                          <Text style={styles.reasonText}>{appointment.notes || "Sin detalle"}</Text>
+                        </View>
+
+                        <View style={[styles.statusBadge, statusStyles.badge]}>
+                          <Text style={[styles.statusBadgeText, statusStyles.text]}>
+                            {getVisualStatusLabel(appointment)}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.innerDivider} />
+
+                      <View style={styles.actionsRow}>
+                        <TouchableOpacity
+                          style={styles.actionItem}
+                          activeOpacity={0.85}
+                          onPress={() => router.push(`/appointments/${appointment.id}` as any)}
+                        >
+                          <Ionicons name="checkmark-circle-outline" size={24} color="#d2a106" />
+                          <Text style={styles.actionStatus}>Estado</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.actionItem}
+                          activeOpacity={0.85}
+                          onPress={() => router.push(`/appointments/edit/${appointment.id}` as any)}
+                        >
+                          <Ionicons name="create-outline" size={24} color={COLORS.primary} />
+                          <Text style={styles.actionEdit}>Editar</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.iconOnlyAction}
+                          activeOpacity={0.85}
+                          onPress={() => handleDeleteAppointment(appointment)}
+                        >
+                          <Ionicons name="trash-outline" size={24} color="#df2f2f" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })
+            )}
+          </>
         )}
       </ScrollView>
 

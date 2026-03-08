@@ -228,4 +228,22 @@ export const styles = StyleSheet.create({
   statusActionTextMuted: {
     color: "#444444",
   },
+  deleteButton: {
+    minHeight: 54,
+    borderRadius: 18,
+    backgroundColor: "#fff7f7",
+    borderWidth: 1,
+    borderColor: "#f0c9c9",
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 20,
+    marginBottom: 8,
+  },
+  deleteButtonText: {
+    color: "#d83030",
+    fontSize: 15,
+    fontWeight: "800",
+  },
 });

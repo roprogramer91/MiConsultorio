@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, TouchableOpacity } from "react-native";
+import { Alert, View, Text, ScrollView, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
@@ -152,6 +152,43 @@ export default function PatientDetailScreen() {
     };
   }
 
+  function handleDeletePatient() {
+    Alert.alert(
+      "Eliminar paciente",
+      `Se eliminara ${patient?.name || "este paciente"} y todos sus turnos asociados. Esta accion no se puede deshacer.`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Eliminar",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const response = await fetch(`${API_URL}/patients/${id}`, {
+                method: "DELETE",
+              });
+              const raw = await response.text();
+              const data = raw ? JSON.parse(raw) : {};
+
+              if (!response.ok) {
+                Alert.alert("Error", data.error || "No se pudo eliminar el paciente");
+                return;
+              }
+
+              Alert.alert("Paciente eliminado", "El paciente y sus turnos asociados se eliminaron correctamente", [
+                {
+                  text: "OK",
+                  onPress: () => router.replace("/patients" as any),
+                },
+              ]);
+            } catch (error) {
+              Alert.alert("Error", "No se pudo eliminar el paciente. Revisa el backend y vuelve a intentar.");
+            }
+          },
+        },
+      ]
+    );
+  }
+
   if (loading) {
     return (
       <View style={styles.centered}>
@@ -302,6 +339,21 @@ export default function PatientDetailScreen() {
               })()
             ))
           )}
+        </View>
+
+        <View style={styles.dangerCard}>
+          <Text style={styles.dangerTitle}>ZONA DE PELIGRO</Text>
+          <Text style={styles.dangerText}>
+            Si eliminas este paciente, tambien se borraran todos los turnos asociados.
+          </Text>
+
+          <TouchableOpacity
+            style={styles.dangerButton}
+            activeOpacity={0.85}
+            onPress={handleDeletePatient}
+          >
+            <Text style={styles.dangerButtonText}>Eliminar paciente</Text>
+          </TouchableOpacity>
         </View>
       </View>
     </ScrollView>

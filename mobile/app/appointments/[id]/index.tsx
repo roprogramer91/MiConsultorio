@@ -186,6 +186,47 @@ export default function AppointmentDetailScreen() {
     }
   }
 
+  function handleDeleteAppointment() {
+    if (!appointmentView) {
+      return;
+    }
+
+    Alert.alert(
+      "Eliminar turno",
+      `Se eliminara el turno de ${appointmentView.patientName}. Esta accion no se puede deshacer.`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Eliminar",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const response = await fetch(`${API_URL}/appointments/${appointmentView.id}`, {
+                method: "DELETE",
+              });
+              const raw = await response.text();
+              const data = raw ? JSON.parse(raw) : {};
+
+              if (!response.ok) {
+                Alert.alert("Error", data.error || "No se pudo eliminar el turno");
+                return;
+              }
+
+              Alert.alert("Turno eliminado", "El turno se eliminó correctamente", [
+                {
+                  text: "OK",
+                  onPress: () => router.replace("/appointments?mode=agenda" as any),
+                },
+              ]);
+            } catch (error) {
+              Alert.alert("Error", "No se pudo eliminar el turno. Revisa el backend y vuelve a intentar.");
+            }
+          },
+        },
+      ]
+    );
+  }
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -279,6 +320,15 @@ export default function AppointmentDetailScreen() {
             );
           })}
         </View>
+
+        <TouchableOpacity
+          style={styles.deleteButton}
+          activeOpacity={0.85}
+          onPress={handleDeleteAppointment}
+        >
+          <Ionicons name="trash-outline" size={18} color="#d83030" />
+          <Text style={styles.deleteButtonText}>Eliminar turno</Text>
+        </TouchableOpacity>
       </ScrollView>
     </View>
   );

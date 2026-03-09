@@ -17,6 +17,7 @@ async function ensureAppointmentSlotAvailable({ date, time, excludeId }) {
     where: {
       date,
       time,
+      status: "pendiente",
       ...(excludeId ? { id: { not: excludeId } } : {}),
     },
   });

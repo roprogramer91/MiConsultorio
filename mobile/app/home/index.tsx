@@ -2,8 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { StatusBar } from "expo-status-bar";
+import { SafeAreaView } from "react-native-safe-area-context";
 
+import { useBiometricLock } from "../../src/auth/biometric-lock";
 import { API_URL } from "../../constants/api";
 import { styles } from "../../src/screens/home/styles";
 
@@ -54,12 +56,12 @@ type Appointment = {
 };
 
 export default function HomeScreen() {
+  const { lockNow } = useBiometricLock();
   const [showQuickMenu, setShowQuickMenu] = useState(false);
   const [now, setNow] = useState(new Date());
   const [nextAppointment, setNextAppointment] = useState<Appointment | null>(null);
   const [todayScheduledCount, setTodayScheduledCount] = useState(0);
   const [loadingNextAppointment, setLoadingNextAppointment] = useState(true);
-  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -210,37 +212,39 @@ export default function HomeScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.screen} edges={["top", "left", "right", "bottom"]}>
-      <ScrollView
-        contentContainerStyle={styles.container}
-        showsVerticalScrollIndicator={false}
-        stickyHeaderIndices={[1]}
-      >
-        <View style={[styles.heroHeader, { paddingTop: insets.top - 40 }]}> 
-          <View style={styles.heroHeaderRow}>
-            <View>
-              <Text style={styles.welcome}>Bienvenido</Text>
-              <Text style={styles.userName}>Dra. Noguera</Text>
-            </View>
+    <SafeAreaView style={styles.safeScreen} edges={["top", "left", "right", "bottom"]}>
+      <StatusBar style="light" backgroundColor={styles.heroHeader.backgroundColor} />
+      <View style={styles.screen}>
+        <ScrollView
+          contentContainerStyle={styles.container}
+          showsVerticalScrollIndicator={false}
+          stickyHeaderIndices={[1]}
+        >
+          <View style={styles.heroHeader}>
+            <View style={styles.heroHeaderRow}>
+              <View>
+                <Text style={styles.welcome}>Bienvenida</Text>
+                <Text style={styles.userName}>Dra. Noguera</Text>
+              </View>
 
-            <TouchableOpacity style={styles.headerAction} activeOpacity={0.85}>
-              <Ionicons name="log-out-outline" size={26} color="#fff" />
+              <TouchableOpacity style={styles.headerAction} activeOpacity={0.85} onPress={lockNow}>
+                <Ionicons name="log-out-outline" size={26} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={styles.stickyHeader}>
+            <TouchableOpacity
+              style={styles.searchBarCompact}
+              activeOpacity={0.9}
+              onPress={() => handleNavigate("/patients")}
+            >
+              <Ionicons name="search-outline" size={24} color="#8b8b8b" />
+              <Text style={styles.searchText}>Buscar paciente por nombre o DNI...</Text>
             </TouchableOpacity>
           </View>
-        </View>
 
-        <View style={styles.stickyHeader}>
-          <TouchableOpacity
-            style={styles.searchBarCompact}
-            activeOpacity={0.9}
-            onPress={() => handleNavigate("/patients")}
-          >
-            <Ionicons name="search-outline" size={24} color="#8b8b8b" />
-            <Text style={styles.searchText}>Buscar paciente por nombre o DNI...</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.content}>
+          <View style={styles.content}>
           <Text style={styles.sectionTitle}>Utilidades</Text>
 
           <View style={styles.utilitySummaryRow}>
@@ -379,8 +383,9 @@ export default function HomeScreen() {
               </TouchableOpacity>
             ))}
           </View>
-        </View>
-      </ScrollView>
+          </View>
+        </ScrollView>
+      </View>
 
       {showQuickMenu && (
         <View style={styles.fabMenu}>

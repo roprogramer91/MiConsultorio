@@ -193,4 +193,24 @@ export const styles = StyleSheet.create({
   cancelButtonText: PATTERNS.buttons.secondaryText,
   saveButton: PATTERNS.buttons.primary,
   saveButtonText: PATTERNS.buttons.primaryText,
+  deleteSection: {
+    marginHorizontal: 20,
+    marginBottom: 12,
+  },
+  deleteButton: {
+    minHeight: 54,
+    borderRadius: 18,
+    backgroundColor: "#fff7f7",
+    borderWidth: 1,
+    borderColor: "#f0c9c9",
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
+  },
+  deleteButtonText: {
+    color: "#d83030",
+    fontSize: 15,
+    fontWeight: "800",
+  },
 });

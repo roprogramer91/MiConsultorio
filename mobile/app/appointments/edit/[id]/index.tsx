@@ -210,6 +210,47 @@ export default function EditAppointmentScreen() {
     }
   }
 
+  function handleDeleteAppointment() {
+    if (!appointment) {
+      return;
+    }
+
+    Alert.alert(
+      "Eliminar turno",
+      `Se eliminara el turno de ${patientView?.name || "este paciente"}. Esta accion no se puede deshacer.`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Eliminar",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const response = await fetch(`${API_URL}/appointments/${appointment.id}`, {
+                method: "DELETE",
+              });
+              const raw = await response.text();
+              const data = raw ? JSON.parse(raw) : {};
+
+              if (!response.ok) {
+                Alert.alert("Error", data.error || "No se pudo eliminar el turno");
+                return;
+              }
+
+              Alert.alert("Turno eliminado", "El turno se eliminó correctamente", [
+                {
+                  text: "OK",
+                  onPress: () => router.replace("/appointments?mode=agenda" as any),
+                },
+              ]);
+            } catch (error) {
+              Alert.alert("Error", "No se pudo eliminar el turno. Revisa el backend y vuelve a intentar.");
+            }
+          },
+        },
+      ]
+    );
+  }
+
   function formatLongDate(date?: Date | null) {
     if (!date) return "Seleccionar fecha";
 
@@ -399,6 +440,13 @@ export default function EditAppointmentScreen() {
 
             <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
               <Text style={styles.saveButtonText}>Guardar Cambios</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.deleteSection}>
+            <TouchableOpacity style={styles.deleteButton} activeOpacity={0.85} onPress={handleDeleteAppointment}>
+              <Ionicons name="trash-outline" size={18} color="#d83030" />
+              <Text style={styles.deleteButtonText}>Eliminar turno</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>

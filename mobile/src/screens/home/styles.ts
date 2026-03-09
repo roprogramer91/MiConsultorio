@@ -4,6 +4,10 @@ import { COLORS } from "../../../constants/colors";
 import { PATTERNS } from "../../styles/patterns";
 
 export const styles = StyleSheet.create({
+  safeScreen: {
+    flex: 1,
+    backgroundColor: COLORS.primary,
+  },
   screen: {
     flex: 1,
     backgroundColor: COLORS.background,
@@ -14,6 +18,7 @@ export const styles = StyleSheet.create({
   heroHeader: {
     backgroundColor: COLORS.primary,
     paddingHorizontal: 20,
+    paddingTop: 6,
     paddingBottom: 8,
   },
   heroHeaderRow: {

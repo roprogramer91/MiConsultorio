@@ -99,6 +99,9 @@ export const getAppointmentsByPatient = async (req, res) => {
       where: {
         patientId: Number(patientId),
       },
+      include: {
+        patient: true,
+      },
       orderBy: [
         { date: "desc" },
         { time: "desc" }
@@ -108,6 +111,30 @@ export const getAppointmentsByPatient = async (req, res) => {
     res.json(appointments);
   } catch (error) {
     console.error("Error obteniendo historial del paciente:", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+};
+
+export const getAppointmentHistory = async (_req, res) => {
+  try {
+    const appointments = await prisma.appointment.findMany({
+      where: {
+        status: {
+          in: ["atendido", "ausente", "cancelado"],
+        },
+      },
+      include: {
+        patient: true,
+      },
+      orderBy: [
+        { date: "desc" },
+        { time: "desc" },
+      ],
+    });
+
+    res.json(appointments);
+  } catch (error) {
+    console.error("Error obteniendo historial de turnos:", error);
     res.status(500).json({ error: "Error interno del servidor" });
   }
 };

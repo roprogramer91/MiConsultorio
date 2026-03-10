@@ -5,6 +5,7 @@ import {
   updateAppointmentStatus,
   getUpcomingAppointments,
   getAppointmentsByPatient,
+  getAppointmentHistory,
   getAppointmentById,
   updateAppointment,
   deleteAppointment,
@@ -15,6 +16,8 @@ const router = express.Router();
 router.post("/appointments", createAppointment);
 
 router.get("/appointments/patient/:patientId", getAppointmentsByPatient);
+
+router.get("/appointments/history", getAppointmentHistory);
 
 router.get("/appointments/upcoming", getUpcomingAppointments);
 

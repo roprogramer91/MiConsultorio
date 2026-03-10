@@ -141,24 +141,10 @@ export default function AppointmentsScreen() {
             return;
           }
 
-          const historyResponses = await Promise.all(
-            safePatients.map((patient) => fetch(`${API_URL}/appointments/patient/${patient.id}`))
-          );
-          const historyData = await Promise.all(historyResponses.map((response) => response.json()));
+          const historyResponse = await fetch(`${API_URL}/appointments/history`);
+          const historyData = await historyResponse.json();
 
-          const mergedHistory = historyData
-            .flatMap((items) => (Array.isArray(items) ? items : []))
-            .filter((appointment): appointment is Appointment => Boolean(appointment?.id))
-            .reduce<Appointment[]>((accumulator, appointment) => {
-              if (accumulator.some((item) => item.id === appointment.id)) {
-                return accumulator;
-              }
-
-              accumulator.push(appointment);
-              return accumulator;
-            }, []);
-
-          setAppointments(mergedHistory);
+          setAppointments(Array.isArray(historyData) ? historyData : []);
         } catch (error) {
           console.log("Error cargando turnos:", error);
         } finally {

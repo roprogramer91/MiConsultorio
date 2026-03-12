@@ -116,6 +116,45 @@ export const getAppointmentsByPatient = async (req, res) => {
   }
 };
 
+export const getAppointmentsByRange = async (req, res) => {
+  try {
+    const { from, to } = req.query;
+
+    if (!from || !to) {
+      return res.status(400).json({ error: "Debes enviar from y to" });
+    }
+
+    const fromDate = new Date(`${String(from)}T00:00:00`);
+    const toDate = new Date(`${String(to)}T23:59:59`);
+
+    if (Number.isNaN(fromDate.getTime()) || Number.isNaN(toDate.getTime())) {
+      return res.status(400).json({ error: "Rango de fechas invalido" });
+    }
+
+    const appointments = await prisma.appointment.findMany({
+      include: {
+        patient: true,
+      },
+      orderBy: [{ date: "asc" }, { time: "asc" }],
+    });
+
+    const filteredAppointments = appointments.filter((appointment) => {
+      const appointmentDate = new Date(`${appointment.date}T12:00:00`);
+
+      if (Number.isNaN(appointmentDate.getTime())) {
+        return false;
+      }
+
+      return appointmentDate >= fromDate && appointmentDate <= toDate;
+    });
+
+    res.json(filteredAppointments);
+  } catch (error) {
+    console.error("Error obteniendo turnos por rango:", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+};
+
 export const getAppointmentHistory = async (_req, res) => {
   try {
     const appointments = await prisma.appointment.findMany({

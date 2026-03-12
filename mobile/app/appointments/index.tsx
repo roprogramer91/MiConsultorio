@@ -24,6 +24,7 @@ type Appointment = {
   date: string;
   time: string;
   status: string;
+  depositPaid?: boolean;
   notes?: string | null;
   patient?: {
     id: number;
@@ -297,6 +298,22 @@ export default function AppointmentsScreen() {
     return getStatusStyle(appointment.status);
   }
 
+  function getDepositStyles(appointment: Appointment) {
+    if (appointment.depositPaid) {
+      return {
+        badge: styles.depositBadgePaid,
+        text: styles.depositBadgeTextPaid,
+        label: "Seña paga",
+      };
+    }
+
+    return {
+      badge: styles.depositBadgePending,
+      text: styles.depositBadgeTextPending,
+      label: "Sin seña",
+    };
+  }
+
   const headerTitle = isHistoryMode ? "Historial" : "Agenda de Turnos";
   const searchPlaceholder = isHistoryMode
     ? "Buscar en historial por paciente o motivo..."
@@ -414,6 +431,7 @@ export default function AppointmentsScreen() {
           ) : (
             filteredAppointments.map((appointment) => {
               const statusStyles = getVisualStatusStyle(appointment);
+              const depositStyles = getDepositStyles(appointment);
 
               return (
                 <TouchableOpacity
@@ -432,16 +450,26 @@ export default function AppointmentsScreen() {
                   <View style={styles.cardContent}>
                     <View style={styles.cardTopRow}>
                       <View style={styles.titleBlock}>
-                        <Text style={styles.patientName}>
+                        <Text style={styles.patientName} numberOfLines={2} ellipsizeMode="tail">
                           {appointment.patient?.name || "Paciente sin nombre"}
                         </Text>
-                        <Text style={styles.reasonText}>{appointment.notes || "Sin detalle"}</Text>
+                        <Text style={styles.reasonText} numberOfLines={2} ellipsizeMode="tail">
+                          {appointment.notes || "Sin detalle"}
+                        </Text>
                       </View>
 
-                      <View style={[styles.statusBadge, statusStyles.badge]}>
-                        <Text style={[styles.statusBadgeText, statusStyles.text]}>
-                          {getVisualStatusLabel(appointment)}
-                        </Text>
+                      <View style={styles.badgesColumn}>
+                        <View style={[styles.depositBadge, depositStyles.badge]}>
+                          <Text style={[styles.depositBadgeText, depositStyles.text]}>
+                            {depositStyles.label}
+                          </Text>
+                        </View>
+
+                        <View style={[styles.statusBadge, statusStyles.badge]}>
+                          <Text style={[styles.statusBadgeText, statusStyles.text]}>
+                            {getVisualStatusLabel(appointment)}
+                          </Text>
+                        </View>
                       </View>
                     </View>
 
@@ -489,6 +517,7 @@ export default function AppointmentsScreen() {
             ) : (
               upcomingAgendaAppointments.map((appointment) => {
                 const statusStyles = getVisualStatusStyle(appointment);
+                const depositStyles = getDepositStyles(appointment);
 
                 return (
                   <TouchableOpacity
@@ -507,16 +536,26 @@ export default function AppointmentsScreen() {
                     <View style={styles.cardContent}>
                       <View style={styles.cardTopRow}>
                         <View style={styles.titleBlock}>
-                          <Text style={styles.patientName}>
-                            {appointment.patient?.name || "Paciente sin nombre"}
-                          </Text>
-                          <Text style={styles.reasonText}>{appointment.notes || "Sin detalle"}</Text>
+                        <Text style={styles.patientName} numberOfLines={2} ellipsizeMode="tail">
+                          {appointment.patient?.name || "Paciente sin nombre"}
+                        </Text>
+                        <Text style={styles.reasonText} numberOfLines={2} ellipsizeMode="tail">
+                          {appointment.notes || "Sin detalle"}
+                        </Text>
                         </View>
 
-                        <View style={[styles.statusBadge, statusStyles.badge]}>
-                          <Text style={[styles.statusBadgeText, statusStyles.text]}>
-                            {getVisualStatusLabel(appointment)}
-                          </Text>
+                        <View style={styles.badgesColumn}>
+                          <View style={[styles.depositBadge, depositStyles.badge]}>
+                            <Text style={[styles.depositBadgeText, depositStyles.text]}>
+                              {depositStyles.label}
+                            </Text>
+                          </View>
+
+                          <View style={[styles.statusBadge, statusStyles.badge]}>
+                            <Text style={[styles.statusBadgeText, statusStyles.text]}>
+                              {getVisualStatusLabel(appointment)}
+                            </Text>
+                          </View>
                         </View>
                       </View>
 
@@ -563,6 +602,7 @@ export default function AppointmentsScreen() {
             ) : (
               pendingReviewAppointments.map((appointment) => {
                 const statusStyles = getVisualStatusStyle(appointment);
+                const depositStyles = getDepositStyles(appointment);
 
                 return (
                   <TouchableOpacity
@@ -581,16 +621,26 @@ export default function AppointmentsScreen() {
                     <View style={styles.cardContent}>
                       <View style={styles.cardTopRow}>
                         <View style={styles.titleBlock}>
-                          <Text style={styles.patientName}>
-                            {appointment.patient?.name || "Paciente sin nombre"}
-                          </Text>
-                          <Text style={styles.reasonText}>{appointment.notes || "Sin detalle"}</Text>
+                        <Text style={styles.patientName} numberOfLines={2} ellipsizeMode="tail">
+                          {appointment.patient?.name || "Paciente sin nombre"}
+                        </Text>
+                        <Text style={styles.reasonText} numberOfLines={2} ellipsizeMode="tail">
+                          {appointment.notes || "Sin detalle"}
+                        </Text>
                         </View>
 
-                        <View style={[styles.statusBadge, statusStyles.badge]}>
-                          <Text style={[styles.statusBadgeText, statusStyles.text]}>
-                            {getVisualStatusLabel(appointment)}
-                          </Text>
+                        <View style={styles.badgesColumn}>
+                          <View style={[styles.depositBadge, depositStyles.badge]}>
+                            <Text style={[styles.depositBadgeText, depositStyles.text]}>
+                              {depositStyles.label}
+                            </Text>
+                          </View>
+
+                          <View style={[styles.statusBadge, statusStyles.badge]}>
+                            <Text style={[styles.statusBadgeText, statusStyles.text]}>
+                              {getVisualStatusLabel(appointment)}
+                            </Text>
+                          </View>
                         </View>
                       </View>
 

@@ -266,9 +266,29 @@ export const styles = StyleSheet.create({
     marginTop: 20,
     marginBottom: 8,
   },
+  shareButton: {
+    minHeight: 54,
+    borderRadius: 18,
+    backgroundColor: COLORS.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 20,
+  },
+  shareButtonText: {
+    color: "#ffffff",
+    fontSize: 15,
+    fontWeight: "800",
+  },
   deleteButtonText: {
     color: "#d83030",
     fontSize: 15,
     fontWeight: "800",
+  },
+  shareCardHidden: {
+    position: "absolute",
+    left: -9999,
+    top: 0,
   },
 });

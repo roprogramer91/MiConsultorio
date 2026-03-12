@@ -24,6 +24,13 @@ const managementCards = [
     route: "/appointments?mode=agenda",
     primary: false,
   },
+  {
+    title: "Calendario",
+    subtitle: "Revisar la semana y filtrar estados",
+    icon: "calendar-clear",
+    route: "/appointments/calendar",
+    primary: false,
+  },
 ];
 
 const quickActions = [

@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 
 import { API_URL } from "../../../constants/api";
+import { AppointmentShareCard } from "../../../components/appointment-share-card";
 import { ScreenHeader } from "../../../components/screen-header";
 import { styles } from "../../../src/screens/appointment-detail/styles";
+import { shareAppointmentCard } from "../../../src/utils/share-appointment-card";
 
 type Appointment = {
   id: number;
@@ -34,6 +36,7 @@ export default function AppointmentDetailScreen() {
   const [appointment, setAppointment] = useState<Appointment | null>(null);
   const [loading, setLoading] = useState(true);
   const [updatingStatus, setUpdatingStatus] = useState<string | null>(null);
+  const shareCardRef = useRef<View | null>(null);
 
   useEffect(() => {
     async function loadAppointment() {
@@ -124,6 +127,16 @@ export default function AppointmentDetailScreen() {
       badge: [styles.statusChip, styles.statusChipInfo],
       text: styles.statusChipTextInfo,
     };
+  }
+
+  function getStatusLabel(status?: string) {
+    const normalized = status?.toLowerCase();
+
+    if (normalized === "atendido") return "Atendido";
+    if (normalized === "ausente") return "Ausente";
+    if (normalized === "cancelado") return "Cancelado";
+
+    return "Programado";
   }
 
   function getStatusCardStyle(status: string) {
@@ -229,6 +242,21 @@ export default function AppointmentDetailScreen() {
     );
   }
 
+  async function handleShareAppointment() {
+    if (!appointmentView || !shareCardRef.current) {
+      return;
+    }
+
+    try {
+      await shareAppointmentCard({
+        target: shareCardRef.current,
+        patientName: appointmentView.patientName,
+      });
+    } catch {
+      Alert.alert("Error", "No se pudo generar la imagen del turno para compartir.");
+    }
+  }
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -286,7 +314,7 @@ export default function AppointmentDetailScreen() {
           <View style={styles.summaryTopRow}>
             <Text style={styles.summaryDate}>{appointmentView.formattedDate}</Text>
             <View style={statusChipStyles.badge}>
-              <Text style={statusChipStyles.text}>{appointmentView.status.charAt(0).toUpperCase() + appointmentView.status.slice(1)}</Text>
+              <Text style={statusChipStyles.text}>{getStatusLabel(appointmentView.status)}</Text>
             </View>
           </View>
 
@@ -342,6 +370,11 @@ export default function AppointmentDetailScreen() {
           })}
         </View>
 
+        <TouchableOpacity style={styles.shareButton} activeOpacity={0.85} onPress={handleShareAppointment}>
+          <Ionicons name="share-social-outline" size={18} color="#ffffff" />
+          <Text style={styles.shareButtonText}>Compartir comprobante</Text>
+        </TouchableOpacity>
+
         <TouchableOpacity
           style={styles.deleteButton}
           activeOpacity={0.85}
@@ -351,6 +384,20 @@ export default function AppointmentDetailScreen() {
           <Text style={styles.deleteButtonText}>Eliminar turno</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      <View style={styles.shareCardHidden} pointerEvents="none" collapsable={false} ref={shareCardRef}>
+        {appointmentView ? (
+          <AppointmentShareCard
+            patientName={appointmentView.patientName}
+            dateLabel={appointmentView.formattedDate}
+            timeLabel={appointment.time}
+            reasonLabel={appointmentView.reason}
+            statusLabel={getStatusLabel(appointmentView.status)}
+            depositPaid={appointmentView.depositPaid}
+            variant="export"
+          />
+        ) : null}
+      </View>
     </View>
   );
 }

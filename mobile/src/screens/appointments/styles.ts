@@ -215,19 +215,28 @@ export const styles = StyleSheet.create({
     alignItems: "flex-start",
     gap: 12,
   },
+  badgesColumn: {
+    alignItems: "flex-end",
+    gap: 8,
+  },
   titleBlock: {
     flex: 1,
+    minWidth: 0,
   },
   patientName: {
     fontSize: 18,
     fontWeight: "800",
     color: "#111",
     marginBottom: 3,
+    lineHeight: 22,
+    flexShrink: 1,
   },
   reasonText: {
     fontSize: 14,
     color: "#757575",
     fontWeight: "500",
+    lineHeight: 20,
+    flexShrink: 1,
   },
   statusBadge: {
     borderRadius: 12,
@@ -237,6 +246,27 @@ export const styles = StyleSheet.create({
   statusBadgeText: {
     fontSize: 14,
     fontWeight: "800",
+  },
+  depositBadge: {
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  depositBadgePaid: {
+    backgroundColor: "#2f8c3c",
+  },
+  depositBadgePending: {
+    backgroundColor: COLORS.primary,
+  },
+  depositBadgeText: {
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  depositBadgeTextPaid: {
+    color: "#ffffff",
+  },
+  depositBadgeTextPending: {
+    color: "#ffffff",
   },
   statusBadgeSuccess: {
     backgroundColor: "#e6f3e8",

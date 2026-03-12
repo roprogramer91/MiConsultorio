@@ -1,8 +1,9 @@
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
   Switch,
@@ -14,9 +15,11 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 
+import { AppointmentShareCard } from "../../../../components/appointment-share-card";
 import { ScreenHeader } from "../../../../components/screen-header";
 import { API_URL } from "../../../../constants/api";
 import { PRIMARY, styles } from "../../../../src/screens/appointment-edit/styles";
+import { shareAppointmentCard } from "../../../../src/utils/share-appointment-card";
 
 type Appointment = {
   id: number;
@@ -56,6 +59,16 @@ export default function EditAppointmentScreen() {
   const [reason, setReason] = useState("");
   const [notes, setNotes] = useState("");
   const [depositPaid, setDepositPaid] = useState(false);
+  const [pendingShareData, setPendingShareData] = useState<null | {
+    appointmentId: number;
+    patientName: string;
+    dateLabel: string;
+    timeLabel: string;
+    reasonLabel: string;
+    statusLabel: string;
+    depositPaid: boolean;
+  }>(null);
+  const shareCardRef = useRef<View | null>(null);
 
   useEffect(() => {
     async function loadAppointment() {
@@ -189,12 +202,15 @@ export default function EditAppointmentScreen() {
         return;
       }
 
-      Alert.alert("Turno actualizado", "Los cambios se guardaron correctamente", [
-        {
-          text: "OK",
-          onPress: () => router.replace(`/appointments/${appointment.id}` as any),
-        },
-      ]);
+      setPendingShareData({
+        appointmentId: appointment.id,
+        patientName: patientView?.name || "Paciente",
+        dateLabel: formatLongDate(appointmentDate),
+        timeLabel: time,
+        reasonLabel: `${reason.trim()}${notes.trim() ? " - " + notes.trim() : ""}`,
+        statusLabel: getStatusLabel(appointment.status),
+        depositPaid,
+      });
     } catch (error) {
       Alert.alert("Error", "No se pudo conectar con el servidor");
     }
@@ -250,6 +266,22 @@ export default function EditAppointmentScreen() {
       month: "long",
       year: "numeric",
     });
+  }
+
+  async function handleShareFromConfirmation(appointmentId: number) {
+    if (!pendingShareData || !shareCardRef.current) {
+      router.replace(`/appointments/${appointmentId}` as any);
+      return;
+    }
+
+    try {
+      await shareAppointmentCard({
+        target: shareCardRef.current,
+        patientName: pendingShareData.patientName,
+      });
+    } catch {
+      Alert.alert("Error", "No se pudo generar la imagen del turno para compartir.");
+    }
   }
 
   if (loading || !appointment || !patientView) {
@@ -463,6 +495,41 @@ export default function EditAppointmentScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <View style={styles.shareCardHidden} pointerEvents="none" collapsable={false} ref={shareCardRef}>
+        {pendingShareData ? <AppointmentShareCard {...pendingShareData} variant="export" /> : null}
+      </View>
+
+      <Modal visible={Boolean(pendingShareData)} transparent animationType="fade" onRequestClose={() => setPendingShareData(null)}>
+        <View style={styles.confirmationOverlay}>
+          <View style={styles.confirmationSheet}>
+            <Text style={styles.confirmationTitle}>Turno actualizado</Text>
+            <Text style={styles.confirmationText}>Comparte el comprobante nuevo si querés enviarle al paciente la versión corregida.</Text>
+            <View style={styles.previewWrap}>
+              {pendingShareData ? <AppointmentShareCard {...pendingShareData} variant="preview" /> : null}
+            </View>
+            <TouchableOpacity
+              style={styles.confirmationPrimaryButton}
+              activeOpacity={0.85}
+              onPress={() => pendingShareData && handleShareFromConfirmation(pendingShareData.appointmentId)}
+            >
+              <Ionicons name="share-social-outline" size={18} color="#ffffff" />
+              <Text style={styles.confirmationPrimaryButtonText}>Compartir comprobante</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.confirmationSecondaryButton}
+              activeOpacity={0.85}
+              onPress={() => {
+                if (!pendingShareData) return;
+                router.replace(`/appointments/${pendingShareData.appointmentId}` as any);
+                setPendingShareData(null);
+              }}
+            >
+              <Text style={styles.confirmationSecondaryButtonText}>Ver detalle del turno</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }

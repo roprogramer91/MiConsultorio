@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   TextInput,
   Alert,
+  Switch,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
@@ -46,36 +47,19 @@ export default function NewAppointmentScreen() {
   const [time, setTime] = useState("");
   const [showHours, setShowHours] = useState(false);
 
-  const availableHours = [
-    "08:00",
-    "08:30",
-    "09:00",
-    "09:30",
-    "10:00",
-    "10:30",
-    "11:00",
-    "11:30",
-    "12:00",
-    "12:30",
-    "13:00",
-    "13:30",
-    "14:00",
-    "14:30",
-    "15:00",
-    "15:30",
-    "16:00",
-    "16:30",
-    "17:00",
-    "17:30",
-    "18:00",
-    "18:30",
-    "19:00",
-    "19:30",
-    "20:00",
-  ];
+  const availableHours = Array.from({ length: 49 }, (_, index) => {
+    const totalMinutes = 8 * 60 + index * 15;
+    const hours = Math.floor(totalMinutes / 60)
+      .toString()
+      .padStart(2, "0");
+    const minutes = (totalMinutes % 60).toString().padStart(2, "0");
+
+    return `${hours}:${minutes}`;
+  });
 
   const [reason, setReason] = useState("");
   const [notes, setNotes] = useState("");
+  const [depositPaid, setDepositPaid] = useState(false);
 
   const filteredPatients = patients.filter((item) => {
     const query = patientSearch.trim().toLowerCase();
@@ -182,6 +166,7 @@ export default function NewAppointmentScreen() {
           date: formattedDate,
           time,
           status: "pendiente",
+          depositPaid,
           notes: `${reason}${notes ? " - " + notes : ""}`,
         }),
       });
@@ -419,6 +404,28 @@ export default function NewAppointmentScreen() {
               multiline
             />
           </View>
+          </View>
+
+          <View style={styles.cardSection}>
+            <View style={styles.section}>
+              <Text style={styles.label}>Seña</Text>
+
+              <View style={styles.switchRow}>
+                <View style={styles.switchInfo}>
+                  <Text style={styles.switchTitle}>Seña paga</Text>
+                  <Text style={styles.switchDescription}>
+                    Marca este turno si el paciente ya abonó la reserva.
+                  </Text>
+                </View>
+
+                <Switch
+                  value={depositPaid}
+                  onValueChange={setDepositPaid}
+                  trackColor={{ false: "#d9d9d9", true: "#f4a3b0" }}
+                  thumbColor={depositPaid ? PRIMARY : "#f5f5f5"}
+                />
+              </View>
+            </View>
           </View>
 
           <View style={styles.footerButtons}>

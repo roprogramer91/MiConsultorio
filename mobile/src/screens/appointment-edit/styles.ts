@@ -182,6 +182,36 @@ export const styles = StyleSheet.create({
   },
   reasonChip: PATTERNS.fields.softChip,
   reasonChipText: PATTERNS.fields.softChipText,
+  switchRow: {
+    minHeight: 72,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#e7dfd9",
+    backgroundColor: "#fffaf8",
+    paddingHorizontal: 18,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 14,
+  },
+  switchRowChanged: {
+    borderColor: PRIMARY,
+    backgroundColor: "#fff8fa",
+  },
+  switchInfo: {
+    flex: 1,
+  },
+  switchTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: TEXT,
+    marginBottom: 4,
+  },
+  switchDescription: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: "#7c726b",
+  },
   footerButtons: {
     flexDirection: "row",
     gap: 14,

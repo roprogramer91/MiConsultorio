@@ -5,6 +5,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -24,6 +25,7 @@ type Appointment = {
   time: string;
   status: string;
   notes?: string | null;
+  depositPaid?: boolean;
   patient?: {
     id: number;
     name: string;
@@ -31,33 +33,15 @@ type Appointment = {
   };
 };
 
-const availableHours = [
-  "08:00",
-  "08:30",
-  "09:00",
-  "09:30",
-  "10:00",
-  "10:30",
-  "11:00",
-  "11:30",
-  "12:00",
-  "12:30",
-  "13:00",
-  "13:30",
-  "14:00",
-  "14:30",
-  "15:00",
-  "15:30",
-  "16:00",
-  "16:30",
-  "17:00",
-  "17:30",
-  "18:00",
-  "18:30",
-  "19:00",
-  "19:30",
-  "20:00",
-];
+const availableHours = Array.from({ length: 49 }, (_, index) => {
+  const totalMinutes = 8 * 60 + index * 15;
+  const hours = Math.floor(totalMinutes / 60)
+    .toString()
+    .padStart(2, "0");
+  const minutes = (totalMinutes % 60).toString().padStart(2, "0");
+
+  return `${hours}:${minutes}`;
+});
 
 const reasonSuggestions = ["Control", "Consulta", "Seguimiento", "Resultados", "Primera vez"];
 
@@ -71,6 +55,7 @@ export default function EditAppointmentScreen() {
   const [showHours, setShowHours] = useState(false);
   const [reason, setReason] = useState("");
   const [notes, setNotes] = useState("");
+  const [depositPaid, setDepositPaid] = useState(false);
 
   useEffect(() => {
     async function loadAppointment() {
@@ -85,6 +70,7 @@ export default function EditAppointmentScreen() {
         setAppointment(data);
         setAppointmentDate(new Date(`${data.date}T00:00:00`));
         setTime(data.time || "");
+        setDepositPaid(Boolean(data.depositPaid));
 
         const fullNotes = data.notes || "";
         const [reasonPart, ...notesParts] = fullNotes.split(" - ");
@@ -127,7 +113,10 @@ export default function EditAppointmentScreen() {
   const currentNotes = `${reason}${notes ? " - " + notes : ""}`;
 
   const hasChanges =
-    currentDate !== originalDate || time !== (appointment?.time || "") || currentNotes !== originalNotes;
+    currentDate !== originalDate ||
+    time !== (appointment?.time || "") ||
+    currentNotes !== originalNotes ||
+    depositPaid !== Boolean(appointment?.depositPaid);
 
   function getStatusLabel(status?: string) {
     if (!status) return "Programado";
@@ -188,6 +177,7 @@ export default function EditAppointmentScreen() {
           date: appointmentDate.toISOString().split("T")[0],
           time,
           status: appointment.status || "pendiente",
+          depositPaid,
           notes: `${reason.trim()}${notes.trim() ? " - " + notes.trim() : ""}`,
         }),
       });
@@ -430,6 +420,28 @@ export default function EditAppointmentScreen() {
                 onChangeText={setNotes}
                 multiline
               />
+            </View>
+          </View>
+
+          <View style={styles.cardSection}>
+            <View style={styles.section}>
+              <Text style={styles.label}>Seña</Text>
+
+              <View style={[styles.switchRow, depositPaid !== Boolean(appointment?.depositPaid) ? styles.switchRowChanged : null]}>
+                <View style={styles.switchInfo}>
+                  <Text style={styles.switchTitle}>Seña paga</Text>
+                  <Text style={styles.switchDescription}>
+                    Marca este turno si el paciente ya abonó la reserva.
+                  </Text>
+                </View>
+
+                <Switch
+                  value={depositPaid}
+                  onValueChange={setDepositPaid}
+                  trackColor={{ false: "#d9d9d9", true: "#f4a3b0" }}
+                  thumbColor={depositPaid ? PRIMARY : "#f5f5f5"}
+                />
+              </View>
             </View>
           </View>
 

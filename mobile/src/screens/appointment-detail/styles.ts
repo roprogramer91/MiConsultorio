@@ -125,6 +125,31 @@ export const styles = StyleSheet.create({
     fontSize: 16,
     color: "#222",
   },
+  depositRow: {
+    marginTop: 18,
+  },
+  depositBadge: {
+    alignSelf: "flex-start",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  depositBadgePaid: {
+    backgroundColor: "#e6f3e8",
+  },
+  depositBadgePending: {
+    backgroundColor: "#fff4db",
+  },
+  depositBadgeText: {
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  depositBadgeTextPaid: {
+    color: "#2f8c3c",
+  },
+  depositBadgeTextPending: {
+    color: "#b98500",
+  },
   statusChip: {
     borderRadius: 10,
     paddingHorizontal: 12,

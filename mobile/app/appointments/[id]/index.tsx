@@ -14,6 +14,7 @@ type Appointment = {
   time: string;
   status: string;
   notes?: string | null;
+  depositPaid?: boolean;
   patient?: {
     id: number;
     name: string;
@@ -90,6 +91,7 @@ export default function AppointmentDetailScreen() {
           : "-",
       time: `${appointment.time} hrs`,
       status: appointment.status || "pendiente",
+      depositPaid: Boolean(appointment.depositPaid),
       reason: appointment.notes || "Sin detalle",
     };
   }, [appointment]);
@@ -294,6 +296,25 @@ export default function AppointmentDetailScreen() {
 
           <Text style={styles.summaryLabel}>Motivo de la consulta</Text>
           <Text style={styles.summaryReason}>{appointmentView.reason}</Text>
+
+          <View style={styles.depositRow}>
+            <Text style={styles.summaryLabel}>Seña</Text>
+            <View
+              style={[
+                styles.depositBadge,
+                appointmentView.depositPaid ? styles.depositBadgePaid : styles.depositBadgePending,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.depositBadgeText,
+                  appointmentView.depositPaid ? styles.depositBadgeTextPaid : styles.depositBadgeTextPending,
+                ]}
+              >
+                {appointmentView.depositPaid ? "Seña paga" : "Sin seña"}
+              </Text>
+            </View>
+          </View>
         </View>
 
         <View style={styles.statusSectionHeader}>

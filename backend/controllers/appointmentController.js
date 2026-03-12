@@ -1,13 +1,14 @@
 import prisma from "../prismaClient.js";
 
 function normalizeAppointmentData(body) {
-  const { patientId, date, time, status, notes } = body;
+  const { patientId, date, time, status, notes, depositPaid } = body;
 
   return {
     patientId: patientId ? Number(patientId) : undefined,
     date: date?.trim(),
     time: time?.trim(),
     status: status?.trim() || "pendiente",
+    depositPaid: Boolean(depositPaid),
     notes: notes?.trim() || null,
   };
 }

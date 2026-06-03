@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -14,26 +8,40 @@ datasource db {
 }
 
 model Patient {
-  id        Int      @id @default(autoincrement())
-  name      String
-  dni       String?
-  phone     String?
-  email     String?
-  birthDate DateTime?
-  notes     String?
-  createdAt DateTime @default(now())
+  id           Int      @id @default(autoincrement())
+  name         String
+  dni          String?
+  phone        String?
+  email        String?
+  birthDate    DateTime?
+  notes        String?
+  obraSocial   String?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
 
-  appointments Appointment[]
+  appointments  Appointment[]
+  clinicalNotes ClinicalNote[]
 }
 
 model Appointment {
+  id          Int     @id @default(autoincrement())
+  patientId   Int
+  date        String
+  time        String
+  duration    Int     @default(30)
+  reason      String?
+  status      String  @default("pendiente")
+  depositPaid Boolean @default(false)
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  patient Patient @relation(fields: [patientId], references: [id])
+}
+
+model ClinicalNote {
   id        Int      @id @default(autoincrement())
   patientId Int
-  date      String
-  time      String
-  status    String   @default("pendiente")
-  depositPaid Boolean @default(false)
-  notes     String?
+  content   String
   createdAt DateTime @default(now())
 
   patient Patient @relation(fields: [patientId], references: [id])

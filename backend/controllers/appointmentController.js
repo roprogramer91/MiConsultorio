@@ -1,7 +1,7 @@
 import prisma from "../prismaClient.js";
 
 function normalizeAppointmentData(body) {
-  const { patientId, date, time, status, notes, depositPaid } = body;
+  const { patientId, date, time, status, notes, depositPaid, duration, reason } = body;
 
   return {
     patientId: patientId ? Number(patientId) : undefined,
@@ -10,6 +10,8 @@ function normalizeAppointmentData(body) {
     status: status?.trim() || "pendiente",
     depositPaid: Boolean(depositPaid),
     notes: notes?.trim() || null,
+    duration: duration ? Number(duration) : 30,
+    reason: reason?.trim() || null,
   };
 }
 

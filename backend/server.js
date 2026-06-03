@@ -14,13 +14,12 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Todas las rutas requieren token válido de Firebase
-app.use(verifyToken);
-
 app.use("/", patientRoutes);
 app.use("/", appointmentRoutes);
-app.use("/", clinicalNoteRoutes);
-app.use("/", statsRoutes);
+
+// Rutas exclusivas del dashboard — requieren token Firebase
+app.use("/", verifyToken, clinicalNoteRoutes);
+app.use("/", verifyToken, statsRoutes);
 
 const PORT = process.env.PORT || 3000;
 

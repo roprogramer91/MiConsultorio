@@ -7,6 +7,7 @@ import appointmentRoutes from "./routes/appointmentRoutes.js";
 import clinicalNoteRoutes from "./routes/clinicalNoteRoutes.js";
 import statsRoutes from "./routes/statsRoutes.js";
 import { startScheduler } from "./services/reminderScheduler.js";
+import testRoutes from "./routes/testRoutes.js";
 
 dotenv.config();
 
@@ -17,6 +18,7 @@ app.use(express.json());
 
 app.use("/", patientRoutes);
 app.use("/", appointmentRoutes);
+app.use("/", testRoutes);
 
 // Rutas exclusivas del dashboard — requieren token Firebase
 app.use("/", verifyToken, clinicalNoteRoutes);

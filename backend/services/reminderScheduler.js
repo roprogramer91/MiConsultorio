@@ -96,3 +96,6 @@ export function startScheduler() {
 
   console.log("[Scheduler] Recordatorios de turnos activos");
 }
+
+// Expuesto para el endpoint de test — dispara el chequeo de 1h ahora mismo
+export { checkOneHourReminders, sendTomorrowSummary };

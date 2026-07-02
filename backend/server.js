@@ -6,6 +6,7 @@ import patientRoutes from "./routes/patientRoutes.js";
 import appointmentRoutes from "./routes/appointmentRoutes.js";
 import clinicalNoteRoutes from "./routes/clinicalNoteRoutes.js";
 import statsRoutes from "./routes/statsRoutes.js";
+import { startScheduler } from "./services/reminderScheduler.js";
 
 dotenv.config();
 
@@ -25,4 +26,5 @@ const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en puerto ${PORT}`);
+  startScheduler();
 });

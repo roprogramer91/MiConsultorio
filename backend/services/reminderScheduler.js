@@ -45,8 +45,11 @@ async function checkOneHourReminders() {
     for (const appt of appointments) {
       if (sentOneHourReminders.has(appt.id)) continue;
 
+      const phoneDigits = appt.patient.phone?.replace(/\D/g, "");
+      const waLink = phoneDigits ? `\n📲 https://wa.me/${phoneDigits}` : "";
+
       await notifyDoctor(
-        `⏰ En ~1 hora: ${appt.patient.name} a las ${appt.time} hs\nhttps://miconsultorio-production.up.railway.app/open/appointments/${appt.id}`
+        `⏰ En ~1 hora: ${appt.patient.name} a las ${appt.time} hs\n👉 https://miconsultorio-production.up.railway.app/open/appointments/${appt.id}${waLink}`
       );
 
       sentOneHourReminders.add(appt.id);

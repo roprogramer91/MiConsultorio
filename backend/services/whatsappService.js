@@ -12,16 +12,25 @@ function getClient() {
   return _client;
 }
 
+function toWhatsApp(phone) {
+  const digits = phone.replace(/\D/g, "");
+  return `whatsapp:+${digits}`;
+}
+
+function fromEnv(varName) {
+  const val = process.env[varName] || "";
+  if (val.startsWith("whatsapp:")) return val;
+  return toWhatsApp(val);
+}
+
 // Envía un WhatsApp de texto a Adri
 export async function notifyDoctor(message) {
   const doctorPhone = process.env.ADRI_WHATSAPP_NUMBER;
   if (!doctorPhone) return;
 
-  const digits = doctorPhone.replace(/\D/g, "");
-
   return getClient().messages.create({
-    from: process.env.TWILIO_WHATSAPP_NUMBER,
-    to: `whatsapp:+${digits}`,
+    from: fromEnv("TWILIO_WHATSAPP_NUMBER"),
+    to: toWhatsApp(doctorPhone),
     body: message,
   });
 }

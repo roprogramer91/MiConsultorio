@@ -1,5 +1,6 @@
 import express from "express";
 import { checkOneHourReminders, sendTomorrowSummary } from "../services/reminderScheduler.js";
+import { notifyDoctor } from "../services/whatsappService.js";
 
 const router = express.Router();
 
@@ -9,6 +10,11 @@ function requireSecret(req, res, next) {
   }
   next();
 }
+
+router.post("/test/whatsapp", requireSecret, async (_req, res) => {
+  await notifyDoctor("✅ Test de WhatsApp funcionando correctamente");
+  res.json({ ok: true, message: "Mensaje enviado a Adri" });
+});
 
 router.post("/test/reminder/1h", requireSecret, async (_req, res) => {
   await checkOneHourReminders();

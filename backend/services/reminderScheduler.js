@@ -46,7 +46,7 @@ async function checkOneHourReminders() {
       if (sentOneHourReminders.has(appt.id)) continue;
 
       await notifyDoctor(
-        `⏰ En ~1 hora: ${appt.patient.name} a las ${appt.time} hs`
+        `⏰ En ~1 hora: ${appt.patient.name} a las ${appt.time} hs\nmiconsultorio://appointments/${appt.id}`
       );
 
       sentOneHourReminders.add(appt.id);
@@ -79,7 +79,7 @@ async function sendTomorrowSummary() {
       .map((a) => `• ${a.time} hs — ${a.patient.name}`)
       .join("\n");
 
-    await notifyDoctor(`📅 Turnos de mañana:\n${lista}`);
+    await notifyDoctor(`📅 Turnos de mañana:\n${lista}\nmiconsultorio://appointments`);
 
     console.log(`[Scheduler] Resumen de mañana enviado (${appointments.length} turnos)`);
   } catch (error) {

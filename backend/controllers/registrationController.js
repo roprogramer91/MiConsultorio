@@ -65,6 +65,8 @@ function validateRegistration(body) {
   return {
     errors,
     data: {
+      firstName,
+      lastName,
       name: `${firstName} ${lastName}`.trim(),
       dni,
       phone,
@@ -135,15 +137,11 @@ export async function listRegistrationInvites(_req, res) {
 
 export async function listRegistrationReviews(_req, res) {
   try {
-    const patients = await prisma.patient.findMany({
-      where: {
-        registrationSource: "self_service",
-        reviewStatus: { in: ["pending", "duplicate_review"] },
-        active: true,
-      },
+    const submissions = await prisma.registrationSubmission.findMany({
+      where: { status: { in: ["pending", "duplicate_review"] } },
       orderBy: { createdAt: "desc" },
     });
-    return res.json(patients);
+    return res.json(submissions);
   } catch (error) {
     console.error("Error listando registros pendientes:", error);
     return res.status(500).json({ error: "No se pudieron obtener los registros pendientes" });
@@ -151,32 +149,112 @@ export async function listRegistrationReviews(_req, res) {
 }
 
 export async function reviewRegistration(req, res) {
-  const patientId = Number(req.params.patientId);
-  if (!Number.isInteger(patientId)) return res.status(400).json({ error: "ID inválido" });
+  const submissionId = Number(req.params.submissionId);
+  if (!Number.isInteger(submissionId)) return res.status(400).json({ error: "ID inválido" });
 
   try {
-    const existing = await prisma.patient.findFirst({
-      where: {
-        id: patientId,
-        registrationSource: "self_service",
-        reviewStatus: { in: ["pending", "duplicate_review"] },
-      },
-      select: { id: true },
+    const submission = await prisma.registrationSubmission.findFirst({
+      where: { id: submissionId, status: { in: ["pending", "duplicate_review"] } },
     });
-    if (!existing) {
+    if (!submission) {
       return res.status(404).json({ error: "Registro pendiente no encontrado" });
     }
 
-    const patient = await prisma.patient.update({
-      where: { id: patientId },
-      data: {
-        reviewStatus: "reviewed",
-        reviewedAt: new Date(),
-        reviewedBy: req.user.uid || req.user.email || "doctor",
-      },
+    const candidate = {
+      firstName: req.body?.firstName ?? submission.firstName,
+      lastName: req.body?.lastName ?? submission.lastName,
+      dni: req.body?.dni ?? submission.dni,
+      phone: req.body?.phone ?? submission.phone,
+      email: req.body?.email ?? submission.email,
+      birthDate: req.body?.birthDate ?? submission.birthDate,
+      coverageType: req.body?.coverageType ?? submission.coverageType,
+      obraSocial: req.body?.obraSocial ?? submission.obraSocial,
+      insurancePlan: req.body?.insurancePlan ?? submission.insurancePlan,
+      memberNumber: req.body?.memberNumber ?? submission.memberNumber,
+    };
+    const { errors, data } = validateRegistration(candidate);
+    if (Object.keys(errors).length > 0) return res.status(400).json({ errors });
+
+    const reviewedAt = new Date();
+    const reviewedBy = req.user.uid || req.user.email || "doctor";
+    const patient = await prisma.$transaction(async (tx) => {
+      const claimed = await tx.registrationSubmission.updateMany({
+        where: { id: submissionId, status: { in: ["pending", "duplicate_review"] } },
+        data: { status: "approving" },
+      });
+      if (claimed.count !== 1) {
+        const conflict = new Error("REVIEW_CONFLICT");
+        conflict.code = "REVIEW_CONFLICT";
+        throw conflict;
+      }
+
+      const duplicate = await tx.patient.findFirst({
+        where: {
+          dni: data.dni,
+          active: true,
+          ...(submission.patientId ? { id: { not: submission.patientId } } : {}),
+        },
+        select: { id: true, name: true },
+      });
+      if (duplicate) {
+        const conflict = new Error("DUPLICATE_PATIENT");
+        conflict.code = "DUPLICATE_PATIENT";
+        conflict.duplicate = duplicate;
+        throw conflict;
+      }
+
+      const { firstName: _firstName, lastName: _lastName, ...patientData } = data;
+      const approvedPatient = submission.patientId
+        ? await tx.patient.update({
+            where: { id: submission.patientId },
+            data: {
+              ...patientData,
+              active: true,
+              registrationSource: "self_service",
+              reviewStatus: "reviewed",
+              reviewedAt,
+              reviewedBy,
+            },
+          })
+        : await tx.patient.create({
+            data: {
+              ...patientData,
+              registrationSource: "self_service",
+              reviewStatus: "reviewed",
+              reviewedAt,
+              reviewedBy,
+            },
+          });
+
+      await tx.registrationSubmission.update({
+        where: { id: submissionId },
+        data: {
+          ...candidate,
+          birthDate: data.birthDate,
+          status: "approved",
+          patientId: approvedPatient.id,
+          reviewedAt,
+          reviewedBy,
+        },
+      });
+      await tx.registrationInvite.update({
+        where: { id: submission.inviteId },
+        data: { patientId: approvedPatient.id },
+      });
+      return approvedPatient;
     });
     return res.json(patient);
   } catch (error) {
+    if (error.code === "DUPLICATE_PATIENT") {
+      return res.status(409).json({
+        error: "Ya existe un paciente activo con ese DNI",
+        code: error.code,
+        duplicate: error.duplicate,
+      });
+    }
+    if (error.code === "REVIEW_CONFLICT") {
+      return res.status(409).json({ error: "Este registro ya fue revisado" });
+    }
     console.error("Error revisando registro:", error);
     return res.status(500).json({ error: "No se pudo marcar el registro como revisado" });
   }
@@ -232,7 +310,7 @@ export async function submitPublicRegistration(req, res) {
   try {
     const now = new Date();
     const tokenHash = hashToken(token);
-    const patient = await prisma.$transaction(async (tx) => {
+    const submission = await prisma.$transaction(async (tx) => {
       const invite = await tx.registrationInvite.findUnique({ where: { tokenHash } });
       const status = publicInviteStatus(invite, now);
       if (status !== "valid") {
@@ -255,25 +333,31 @@ export async function submitPublicRegistration(req, res) {
         where: { dni: data.dni, active: true },
         select: { id: true },
       });
-      const created = await tx.patient.create({
+      const created = await tx.registrationSubmission.create({
         data: {
-          ...data,
-          registrationSource: "self_service",
-          reviewStatus: possibleDuplicate ? "duplicate_review" : "pending",
+          inviteId: invite.id,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          dni: data.dni,
+          phone: data.phone,
+          email: data.email,
+          birthDate: data.birthDate,
+          coverageType: data.coverageType,
+          obraSocial: data.obraSocial,
+          insurancePlan: data.insurancePlan,
+          memberNumber: data.memberNumber,
+          status: possibleDuplicate ? "duplicate_review" : "pending",
+          possibleDuplicatePatientId: possibleDuplicate?.id || null,
         },
-      });
-      await tx.registrationInvite.update({
-        where: { id: invite.id },
-        data: { patientId: created.id },
       });
       return created;
     });
 
     return res.status(201).json({
-      patient: {
-        id: patient.id,
-        name: patient.name,
-        coverageType: patient.coverageType,
+      registration: {
+        id: submission.id,
+        name: `${submission.firstName} ${submission.lastName}`,
+        coverageType: submission.coverageType,
       },
       message: "Tus datos se registraron correctamente. La Dra. Adriana los revisará y confirmará tu turno por WhatsApp.",
     });

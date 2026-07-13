@@ -13,6 +13,6 @@ router.post("/registration-invites", createRegistrationInvite);
 router.get("/registration-invites", listRegistrationInvites);
 router.patch("/registration-invites/:id/revoke", revokeRegistrationInvite);
 router.get("/registration-reviews", listRegistrationReviews);
-router.patch("/registration-reviews/:patientId/review", reviewRegistration);
+router.patch("/registration-reviews/:submissionId/review", reviewRegistration);
 
 export default router;

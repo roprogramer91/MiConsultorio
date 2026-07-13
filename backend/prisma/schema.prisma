@@ -8,30 +8,54 @@ datasource db {
 }
 
 model Patient {
-  id           Int      @id @default(autoincrement())
-  name         String
-  dni          String?
-  phone        String?
-  email        String?
-  birthDate    DateTime?
-  notes        String?
-  obraSocial   String?
-  active       Boolean  @default(true)
-  createdAt    DateTime @default(now())
+  id                 Int       @id @default(autoincrement())
+  name               String
+  dni                String?
+  phone              String?
+  email              String?
+  birthDate          DateTime?
+  notes              String?
+  obraSocial         String?
+  coverageType       String    @default("private")
+  insurancePlan      String?
+  memberNumber       String?
+  reviewStatus       String    @default("reviewed")
+  registrationSource String    @default("doctor")
+  reviewedAt         DateTime?
+  reviewedBy         String?
+  active             Boolean   @default(true)
+  createdAt          DateTime  @default(now())
 
-  appointments  Appointment[]
-  clinicalNotes ClinicalNote[]
+  appointments        Appointment[]
+  clinicalNotes       ClinicalNote[]
+  registrationInvites RegistrationInvite[]
+}
+
+model RegistrationInvite {
+  id        Int       @id @default(autoincrement())
+  tokenHash String    @unique
+  status    String    @default("pending")
+  createdAt DateTime  @default(now())
+  expiresAt DateTime
+  usedAt    DateTime?
+  revokedAt DateTime?
+  createdBy String
+  patientId Int?
+
+  patient Patient? @relation(fields: [patientId], references: [id])
+
+  @@index([status, expiresAt])
 }
 
 model Appointment {
-  id          Int     @id @default(autoincrement())
+  id          Int      @id @default(autoincrement())
   patientId   Int
   date        String
   time        String
-  duration    Int     @default(30)
+  duration    Int      @default(30)
   reason      String?
-  status      String  @default("pendiente")
-  depositPaid Boolean @default(false)
+  status      String   @default("pendiente")
+  depositPaid Boolean  @default(false)
   notes       String?
   createdAt   DateTime @default(now())
 

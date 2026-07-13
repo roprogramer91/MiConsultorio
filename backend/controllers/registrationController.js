@@ -1,0 +1,287 @@
+import crypto from "node:crypto";
+import prisma from "../prismaClient.js";
+
+const INVITE_DURATION_MS = 30 * 60 * 1000;
+const VALID_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
+
+function clean(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function normalizeDni(value) {
+  return clean(value).replace(/\D/g, "");
+}
+
+function normalizePhone(value) {
+  return clean(value).replace(/[^\d+]/g, "");
+}
+
+function normalizeEmail(value) {
+  return clean(value).toLowerCase();
+}
+
+function hashToken(token) {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
+
+function publicInviteStatus(invite, now = new Date()) {
+  if (!invite || invite.status === "revoked") return "unavailable";
+  if (invite.status === "used") return "used";
+  if (invite.status === "expired" || invite.expiresAt <= now) return "expired";
+  return invite.status === "pending" ? "valid" : "unavailable";
+}
+
+function validateRegistration(body) {
+  const firstName = clean(body.firstName);
+  const lastName = clean(body.lastName);
+  const dni = normalizeDni(body.dni);
+  const phone = normalizePhone(body.phone);
+  const email = normalizeEmail(body.email) || null;
+  const coverageType = clean(body.coverageType).toLowerCase();
+  const obraSocial = clean(body.obraSocial) || null;
+  const insurancePlan = clean(body.insurancePlan) || null;
+  const memberNumber = clean(body.memberNumber) || null;
+  const birthDate = new Date(body.birthDate);
+  const errors = {};
+
+  if (!firstName) errors.firstName = "El nombre es obligatorio";
+  if (!lastName) errors.lastName = "El apellido es obligatorio";
+  if (dni.length < 7 || dni.length > 9) errors.dni = "Ingresá un DNI válido";
+  if (Number.isNaN(birthDate.getTime()) || birthDate > new Date()) {
+    errors.birthDate = "Ingresá una fecha de nacimiento válida";
+  }
+  if (phone.replace(/\D/g, "").length < 8) errors.phone = "Ingresá un teléfono válido";
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    errors.email = "Ingresá un correo válido";
+  }
+  if (!["private", "insurance"].includes(coverageType)) {
+    errors.coverageType = "Seleccioná Particular u Obra social";
+  }
+  if (coverageType === "insurance") {
+    if (!obraSocial) errors.obraSocial = "La obra social es obligatoria";
+    if (!memberNumber) errors.memberNumber = "El número de afiliado es obligatorio";
+  }
+
+  return {
+    errors,
+    data: {
+      name: `${firstName} ${lastName}`.trim(),
+      dni,
+      phone,
+      email,
+      birthDate,
+      coverageType,
+      obraSocial: coverageType === "insurance" ? obraSocial : null,
+      insurancePlan: coverageType === "insurance" ? insurancePlan : null,
+      memberNumber: coverageType === "insurance" ? memberNumber : null,
+    },
+  };
+}
+
+export async function createRegistrationInvite(req, res) {
+  try {
+    const token = crypto.randomBytes(32).toString("base64url");
+    const expiresAt = new Date(Date.now() + INVITE_DURATION_MS);
+    const invite = await prisma.registrationInvite.create({
+      data: {
+        tokenHash: hashToken(token),
+        expiresAt,
+        createdBy: req.user.uid || req.user.email || "doctor",
+      },
+    });
+    const baseUrl = process.env.REGISTRATION_FORM_URL?.replace(/\/+$/, "");
+    const registrationPath = `/registro/${token}`;
+
+    return res.status(201).json({
+      id: invite.id,
+      status: invite.status,
+      createdAt: invite.createdAt,
+      expiresAt: invite.expiresAt,
+      registrationPath,
+      registrationUrl: baseUrl ? `${baseUrl}${registrationPath}` : null,
+    });
+  } catch (error) {
+    console.error("Error creando invitación:", error);
+    return res.status(500).json({ error: "No se pudo generar el enlace" });
+  }
+}
+
+export async function listRegistrationInvites(_req, res) {
+  try {
+    const now = new Date();
+    await prisma.registrationInvite.updateMany({
+      where: { status: "pending", expiresAt: { lte: now } },
+      data: { status: "expired" },
+    });
+    const invites = await prisma.registrationInvite.findMany({
+      select: {
+        id: true,
+        status: true,
+        createdAt: true,
+        expiresAt: true,
+        usedAt: true,
+        revokedAt: true,
+        patientId: true,
+      },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    });
+    return res.json(invites);
+  } catch (error) {
+    console.error("Error listando invitaciones:", error);
+    return res.status(500).json({ error: "No se pudieron obtener los enlaces" });
+  }
+}
+
+export async function listRegistrationReviews(_req, res) {
+  try {
+    const patients = await prisma.patient.findMany({
+      where: {
+        registrationSource: "self_service",
+        reviewStatus: { in: ["pending", "duplicate_review"] },
+        active: true,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    return res.json(patients);
+  } catch (error) {
+    console.error("Error listando registros pendientes:", error);
+    return res.status(500).json({ error: "No se pudieron obtener los registros pendientes" });
+  }
+}
+
+export async function reviewRegistration(req, res) {
+  const patientId = Number(req.params.patientId);
+  if (!Number.isInteger(patientId)) return res.status(400).json({ error: "ID inválido" });
+
+  try {
+    const existing = await prisma.patient.findFirst({
+      where: {
+        id: patientId,
+        registrationSource: "self_service",
+        reviewStatus: { in: ["pending", "duplicate_review"] },
+      },
+      select: { id: true },
+    });
+    if (!existing) {
+      return res.status(404).json({ error: "Registro pendiente no encontrado" });
+    }
+
+    const patient = await prisma.patient.update({
+      where: { id: patientId },
+      data: {
+        reviewStatus: "reviewed",
+        reviewedAt: new Date(),
+        reviewedBy: req.user.uid || req.user.email || "doctor",
+      },
+    });
+    return res.json(patient);
+  } catch (error) {
+    console.error("Error revisando registro:", error);
+    return res.status(500).json({ error: "No se pudo marcar el registro como revisado" });
+  }
+}
+
+export async function revokeRegistrationInvite(req, res) {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: "ID inválido" });
+
+  try {
+    const revokedAt = new Date();
+    const result = await prisma.registrationInvite.updateMany({
+      where: { id, status: "pending", expiresAt: { gt: revokedAt } },
+      data: { status: "revoked", revokedAt },
+    });
+    if (result.count === 0) {
+      return res.status(409).json({ error: "El enlace ya no puede revocarse" });
+    }
+    return res.json({ id, status: "revoked", revokedAt });
+  } catch (error) {
+    console.error("Error revocando invitación:", error);
+    return res.status(500).json({ error: "No se pudo revocar el enlace" });
+  }
+}
+
+export async function getPublicRegistrationStatus(req, res) {
+  const { token } = req.params;
+  if (!VALID_TOKEN_PATTERN.test(token)) return res.json({ status: "unavailable" });
+
+  try {
+    const invite = await prisma.registrationInvite.findUnique({
+      where: { tokenHash: hashToken(token) },
+      select: { status: true, expiresAt: true },
+    });
+    const status = publicInviteStatus(invite);
+    return res.json({
+      status,
+      expiresAt: status === "valid" ? invite.expiresAt : undefined,
+    });
+  } catch (error) {
+    console.error("Error validando invitación:", error);
+    return res.status(500).json({ error: "No se pudo validar el enlace" });
+  }
+}
+
+export async function submitPublicRegistration(req, res) {
+  const { token } = req.params;
+  if (!VALID_TOKEN_PATTERN.test(token)) return res.status(410).json({ status: "unavailable" });
+
+  const { errors, data } = validateRegistration(req.body || {});
+  if (Object.keys(errors).length > 0) return res.status(400).json({ errors });
+
+  try {
+    const now = new Date();
+    const tokenHash = hashToken(token);
+    const patient = await prisma.$transaction(async (tx) => {
+      const invite = await tx.registrationInvite.findUnique({ where: { tokenHash } });
+      const status = publicInviteStatus(invite, now);
+      if (status !== "valid") {
+        const unavailable = new Error(status);
+        unavailable.code = "INVITE_UNAVAILABLE";
+        throw unavailable;
+      }
+
+      const claimed = await tx.registrationInvite.updateMany({
+        where: { id: invite.id, status: "pending", expiresAt: { gt: now } },
+        data: { status: "used", usedAt: now },
+      });
+      if (claimed.count !== 1) {
+        const unavailable = new Error("used");
+        unavailable.code = "INVITE_UNAVAILABLE";
+        throw unavailable;
+      }
+
+      const possibleDuplicate = await tx.patient.findFirst({
+        where: { dni: data.dni, active: true },
+        select: { id: true },
+      });
+      const created = await tx.patient.create({
+        data: {
+          ...data,
+          registrationSource: "self_service",
+          reviewStatus: possibleDuplicate ? "duplicate_review" : "pending",
+        },
+      });
+      await tx.registrationInvite.update({
+        where: { id: invite.id },
+        data: { patientId: created.id },
+      });
+      return created;
+    });
+
+    return res.status(201).json({
+      patient: {
+        id: patient.id,
+        name: patient.name,
+        coverageType: patient.coverageType,
+      },
+      message: "Tus datos se registraron correctamente. La Dra. Adriana los revisará y confirmará tu turno por WhatsApp.",
+    });
+  } catch (error) {
+    if (error.code === "INVITE_UNAVAILABLE") {
+      return res.status(410).json({ status: error.message });
+    }
+    console.error("Error registrando paciente:", error);
+    return res.status(500).json({ error: "No se pudo completar el registro" });
+  }
+}

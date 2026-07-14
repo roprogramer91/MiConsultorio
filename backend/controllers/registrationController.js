@@ -261,6 +261,15 @@ export async function reviewRegistration(req, res) {
     return res.json(patient);
   } catch (error) {
     if (error.code === "DUPLICATE_PATIENT") {
+      await prisma.registrationSubmission.updateMany({
+        where: { id: submissionId, status: { in: ["pending", "duplicate_review"] } },
+        data: {
+          status: "duplicate_review",
+          possibleDuplicatePatientId: error.duplicate.id,
+        },
+      }).catch((updateError) => {
+        console.error("Error marcando posible duplicado:", updateError);
+      });
       return res.status(409).json({
         error: "Ya existe un paciente activo con ese DNI",
         code: error.code,

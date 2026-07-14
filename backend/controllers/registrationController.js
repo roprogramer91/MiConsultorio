@@ -141,7 +141,22 @@ export async function listRegistrationReviews(_req, res) {
       where: { status: { in: ["pending", "duplicate_review"] } },
       orderBy: { createdAt: "desc" },
     });
-    return res.json(submissions);
+    const duplicateIds = [...new Set(
+      submissions.map((item) => item.possibleDuplicatePatientId).filter(Boolean),
+    )];
+    const duplicatePatients = duplicateIds.length
+      ? await prisma.patient.findMany({
+          where: { id: { in: duplicateIds }, active: true },
+          select: { id: true, name: true, dni: true, phone: true, birthDate: true },
+        })
+      : [];
+    const duplicatesById = new Map(duplicatePatients.map((patient) => [patient.id, patient]));
+    return res.json(submissions.map((submission) => ({
+      ...submission,
+      possibleDuplicate: submission.possibleDuplicatePatientId
+        ? duplicatesById.get(submission.possibleDuplicatePatientId) || null
+        : null,
+    })));
   } catch (error) {
     console.error("Error listando registros pendientes:", error);
     return res.status(500).json({ error: "No se pudieron obtener los registros pendientes" });
@@ -196,7 +211,7 @@ export async function reviewRegistration(req, res) {
         },
         select: { id: true, name: true },
       });
-      if (duplicate) {
+      if (duplicate && !req.body?.allowDuplicate) {
         const conflict = new Error("DUPLICATE_PATIENT");
         conflict.code = "DUPLICATE_PATIENT";
         conflict.duplicate = duplicate;
@@ -257,6 +272,89 @@ export async function reviewRegistration(req, res) {
     }
     console.error("Error revisando registro:", error);
     return res.status(500).json({ error: "No se pudo marcar el registro como revisado" });
+  }
+}
+
+export async function rejectRegistration(req, res) {
+  const submissionId = Number(req.params.submissionId);
+  if (!Number.isInteger(submissionId)) return res.status(400).json({ error: "ID inválido" });
+
+  try {
+    const reviewedAt = new Date();
+    const reviewedBy = req.user.uid || req.user.email || "doctor";
+    const result = await prisma.registrationSubmission.updateMany({
+      where: { id: submissionId, status: { in: ["pending", "duplicate_review"] } },
+      data: { status: "rejected", reviewedAt, reviewedBy },
+    });
+    if (result.count !== 1) {
+      return res.status(409).json({ error: "Esta solicitud ya fue procesada" });
+    }
+    return res.json({ id: submissionId, status: "rejected", reviewedAt });
+  } catch (error) {
+    console.error("Error rechazando registro:", error);
+    return res.status(500).json({ error: "No se pudo rechazar la solicitud" });
+  }
+}
+
+export async function linkRegistrationToPatient(req, res) {
+  const submissionId = Number(req.params.submissionId);
+  const requestedPatientId = Number(req.body?.patientId);
+  if (!Number.isInteger(submissionId) || !Number.isInteger(requestedPatientId)) {
+    return res.status(400).json({ error: "Solicitud o paciente inválido" });
+  }
+
+  try {
+    const reviewedAt = new Date();
+    const reviewedBy = req.user.uid || req.user.email || "doctor";
+    const patient = await prisma.$transaction(async (tx) => {
+      const submission = await tx.registrationSubmission.findFirst({
+        where: { id: submissionId, status: "duplicate_review" },
+      });
+      if (!submission) {
+        const conflict = new Error("REVIEW_CONFLICT");
+        conflict.code = "REVIEW_CONFLICT";
+        throw conflict;
+      }
+
+      const existingPatient = await tx.patient.findFirst({
+        where: { id: requestedPatientId, active: true },
+      });
+      if (!existingPatient) {
+        const missing = new Error("PATIENT_NOT_FOUND");
+        missing.code = "PATIENT_NOT_FOUND";
+        throw missing;
+      }
+
+      const claimed = await tx.registrationSubmission.updateMany({
+        where: { id: submissionId, status: "duplicate_review" },
+        data: {
+          status: "linked",
+          patientId: existingPatient.id,
+          reviewedAt,
+          reviewedBy,
+        },
+      });
+      if (claimed.count !== 1) {
+        const conflict = new Error("REVIEW_CONFLICT");
+        conflict.code = "REVIEW_CONFLICT";
+        throw conflict;
+      }
+      await tx.registrationInvite.update({
+        where: { id: submission.inviteId },
+        data: { patientId: existingPatient.id },
+      });
+      return existingPatient;
+    });
+    return res.json(patient);
+  } catch (error) {
+    if (error.code === "REVIEW_CONFLICT") {
+      return res.status(409).json({ error: "Esta solicitud ya fue procesada" });
+    }
+    if (error.code === "PATIENT_NOT_FOUND") {
+      return res.status(404).json({ error: "El paciente existente ya no está disponible" });
+    }
+    console.error("Error vinculando registro:", error);
+    return res.status(500).json({ error: "No se pudo vincular la solicitud" });
   }
 }
 
